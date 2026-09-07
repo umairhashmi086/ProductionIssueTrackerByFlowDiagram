@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Docker Compose": {
+      "commandName": "DockerCompose",
+      "commandVersion": "1.0",
+      "serviceActions": {
+        "prod_issuetracker_poc": "StartDebugging",
+        "prod_issuetracker_poc.web": "StartDebugging"
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+services:
+  investigate-api:
+    build:
+      context: .
+      dockerfile: Prod_IssueTracker_POC/Dockerfile
+    ports:
+      - "5221:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      # This project only LOGS now — Loki is the required data source, since
+      # Prod_IssueTracker_POC.Web reads exclusively from Loki, never from
+      # this API's in-memory store. InMemory mode still exists for quick
+      # local testing without Loki, but nothing will be investigable that way.
+      - FlowTags__DataSource=${FLOW_TAGS_DATASOURCE:-Loki}
+      - Loki__BaseUrl=http://loki:3100
+      - Loki__AppLabel=poc-feeservice
+    depends_on:
+      - loki
+
+  investigate-web:
+    build:
+      context: .
+      dockerfile: Prod_IssueTracker_POC.Web/Dockerfile
+    ports:
+      - "5250:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      # Reads: straight to Loki, independent of investigate-api entirely.
+      - Loki__BaseUrl=http://loki:3100
+      - Loki__AppLabel=poc-feeservice
+      # Writes: only used by the "seed demo data" button, which asks the
+      # producer's own API to log a scenario — see DemoSeedClient.cs.
+      - InvestigateApi__BaseUrl=http://investigate-api:8080
+    depends_on:
+      - investigate-api
+      - loki
+
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml

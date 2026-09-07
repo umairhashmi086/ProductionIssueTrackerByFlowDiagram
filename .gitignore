@@ -1,0 +1,12 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs/Prod_IssueTracker_POC
+/obj/Docker
+/Prod_IssueTracker_POC/obj
+/Prod_IssueTracker_POC.Web/obj
+/bin/Debug
+/obj/Debug
+/Prod_IssueTracker_POC/bin/Debug/net8.0
+/Prod_IssueTracker_POC.Web/bin/Debug/net8.0

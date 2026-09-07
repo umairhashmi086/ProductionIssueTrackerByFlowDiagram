@@ -1,0 +1,92 @@
+@model ReferenceViewModel
+@{
+    ViewData["Title"] = Model.ReferenceNumber;
+    var active = Model.ActiveAttempt;
+}
+
+<div class="search-row">
+    <form asp-action="Reference" asp-controller="Investigate" method="get" style="display:flex; gap:8px; flex:1;">
+        <input type="text" name="referenceNumber" value="@Model.ReferenceNumber" />
+        <button type="submit">Investigate</button>
+    </form>
+</div>
+
+<div class="meta-line">@Model.Attempts.Count attempt@(Model.Attempts.Count == 1 ? "" : "s") found for @Model.ReferenceNumber — flow: @Model.FlowName</div>
+
+<div class="attempts">
+    @for (int i = 0; i < Model.Attempts.Count; i++)
+    {
+        var a = Model.Attempts[i];
+        var cls = a.IsHealthy ? "ok" : "bad";
+        var statusText = a.IsHealthy ? $"Reached {a.LastValidTag}" : (a.DeadEnd ? $"Stuck at {a.LastValidTag}" : $"Unexpected: {a.UnexpectedTag}");
+        var activeCls = i == Model.ActiveAttemptIndex ? "active" : "";
+        <a class="attempt-tab @cls @activeCls"
+           asp-action="Reference" asp-controller="Investigate"
+           asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-attemptIndex="@i">
+            <div class="num">Attempt @a.AttemptNumber</div>
+            <div class="time">@a.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</div>
+            <div class="status @cls">@statusText</div>
+        </a>
+    }
+</div>
+
+@if (!string.IsNullOrEmpty(active.CrossAttemptLink))
+{
+    <div class="link-banner"><b>Cross-attempt link —</b> @active.CrossAttemptLink</div>
+}
+
+@if (active.IsHealthy)
+{
+    <div class="health-banner ok">Healthy — reached terminal state @active.LastValidTag.</div>
+}
+else if (active.DeadEnd)
+{
+    <div class="health-banner bad">Deviation — flow stopped at <b>@active.LastValidTag</b> with no terminal tag reached.</div>
+}
+else
+{
+    <div class="health-banner bad">Deviation — expected a different tag after <b>@active.LastValidTag</b>, got <b>@active.UnexpectedTag</b>.</div>
+}
+
+<div class="diagram-panel">
+    <h3>Flow Diagram</h3>
+    @Html.Raw(Model.Diagram.SvgMarkup)
+    <div class="diagram-legend">
+        <span><span class="legend-dot" style="background:#2ecc71"></span> reached</span>
+        <span><span class="legend-dot" style="background:#ef5350"></span> stopped / unexpected</span>
+        <span><span class="legend-dot" style="background:#3a4150"></span> not reached</span>
+    </div>
+</div>
+
+<div class="section-label">Raw Tag Sequence</div>
+<div class="timeline">
+    @for (int i = 0; i < active.TagSequence.Count; i++)
+    {
+        var t = active.TagSequence[i];
+        var isLast = i == active.TagSequence.Count - 1;
+        var isDeadEndTag = isLast && active.DeadEnd;
+        <div class="tag-row">
+            <div class="dot-col">
+                <div class="dot @(isDeadEndTag ? "bad" : "ok")">@(isDeadEndTag ? "×" : "✓")</div>
+                @if (!isLast)
+                {
+                    <div class="connector @(isDeadEndTag ? "bad" : "")"></div>
+                }
+            </div>
+            <div class="tag-body @(isDeadEndTag ? "deadend" : "")">
+                <div class="tag-name">
+                    @t.TagName@(isDeadEndTag ? " — dead end" : "")
+                    @if (t.RetryCount > 1)
+                    {
+                        <span class="retry-badge">retried:@t.RetryCount</span>
+                    }
+                </div>
+                <div class="tag-time">@t.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</div>
+                @if (!string.IsNullOrEmpty(t.MetadataJson))
+                {
+                    <div class="tag-meta">@t.MetadataJson</div>
+                }
+            </div>
+        </div>
+    }
+</div>

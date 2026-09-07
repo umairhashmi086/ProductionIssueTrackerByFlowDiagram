@@ -1,0 +1,17 @@
+@{
+    ViewData["Title"] = "Investigate";
+}
+
+<form asp-action="Reference" asp-controller="Investigate" method="get" class="search-row">
+    <input type="text" name="referenceNumber" placeholder="Reference number, e.g. MG-2026-00417" />
+    <button type="submit">Investigate</button>
+</form>
+
+<div class="hint">
+    No data yet?
+    <form asp-action="SeedDemo" asp-controller="Investigate" method="post">
+        <button type="submit" class="linklike">Seed the MoneyGram demo scenario</button>
+    </form>
+    Or call the API project's <code>GetFee</code> endpoint a couple of times with the same
+    <code>referenceNumber</code> to generate real FeeService data instead.
+</div>

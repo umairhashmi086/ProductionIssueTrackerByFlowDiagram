@@ -1,0 +1,12 @@
+@{
+    ViewData["Title"] = "Not found";
+}
+
+<div class="search-row">
+    <form asp-action="Reference" asp-controller="Investigate" method="get" style="display:flex; gap:8px; flex:1;">
+        <input type="text" name="referenceNumber" placeholder="Reference number" />
+        <button type="submit">Investigate</button>
+    </form>
+</div>
+
+<div class="empty">No attempts found for reference "@ViewBag.NotFoundReference".</div>

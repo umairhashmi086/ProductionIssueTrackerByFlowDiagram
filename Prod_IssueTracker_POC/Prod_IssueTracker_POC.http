@@ -1,0 +1,6 @@
+@Prod_IssueTracker_POC_HostAddress = http://localhost:5221
+
+GET {{Prod_IssueTracker_POC_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
