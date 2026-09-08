@@ -18,7 +18,9 @@
     {
         var a = Model.Attempts[i];
         var cls = a.IsHealthy ? "ok" : "bad";
-        var statusText = a.IsHealthy ? $"Reached {a.LastValidTag}" : (a.DeadEnd ? $"Stuck at {a.LastValidTag}" : $"Unexpected: {a.UnexpectedTag}");
+        var statusText = a.IsHealthy
+            ? $"Reached {a.LastValidTag}"
+            : (a.HasDeviations ? $"{a.DeviationCount} unexpected tag(s)" : $"Stuck at {a.LastValidTag}");
         var activeCls = i == Model.ActiveAttemptIndex ? "active" : "";
         <a class="attempt-tab @cls @activeCls"
            asp-action="Reference" asp-controller="Investigate"
@@ -39,13 +41,18 @@
 {
     <div class="health-banner ok">Healthy — reached terminal state @active.LastValidTag.</div>
 }
-else if (active.DeadEnd)
-{
-    <div class="health-banner bad">Deviation — flow stopped at <b>@active.LastValidTag</b> with no terminal tag reached.</div>
-}
 else
 {
-    <div class="health-banner bad">Deviation — expected a different tag after <b>@active.LastValidTag</b>, got <b>@active.UnexpectedTag</b>.</div>
+    <div class="health-banner bad">
+        @if (active.HasDeviations)
+        {
+            <span>Deviation — @active.DeviationCount unexpected tag(s) found (highlighted red below).</span>
+        }
+        @if (active.DeadEnd)
+        {
+            <span>@(active.HasDeviations ? " Also, the" : "The") flow stopped at <b>@active.LastValidTag</b> without reaching a terminal state.</span>
+        }
+    </div>
 }
 
 <div class="diagram-panel">
@@ -53,8 +60,9 @@ else
     @Html.Raw(Model.Diagram.SvgMarkup)
     <div class="diagram-legend">
         <span><span class="legend-dot" style="background:#2ecc71"></span> reached</span>
-        <span><span class="legend-dot" style="background:#ef5350"></span> stopped / unexpected</span>
+        <span><span class="legend-dot" style="background:#ef5350"></span> dead end</span>
         <span><span class="legend-dot" style="background:#3a4150"></span> not reached</span>
+        <span>🔴 unexpected tag followed — see raw sequence below</span>
     </div>
 </div>
 
@@ -65,21 +73,18 @@ else
         var t = active.TagSequence[i];
         var isLast = i == active.TagSequence.Count - 1;
         var isDeadEndTag = isLast && active.DeadEnd;
+        var isBadRow = t.IsUnexpected || isDeadEndTag;
         <div class="tag-row">
             <div class="dot-col">
-                <div class="dot @(isDeadEndTag ? "bad" : "ok")">@(isDeadEndTag ? "×" : "✓")</div>
+                <div class="dot @(isBadRow ? "bad" : "ok")">@(isBadRow ? "×" : "✓")</div>
                 @if (!isLast)
                 {
-                    <div class="connector @(isDeadEndTag ? "bad" : "")"></div>
+                    <div class="connector @(isBadRow ? "bad" : "")"></div>
                 }
             </div>
-            <div class="tag-body @(isDeadEndTag ? "deadend" : "")">
+            <div class="tag-body @(isBadRow ? "deadend" : "")">
                 <div class="tag-name">
-                    @t.TagName@(isDeadEndTag ? " — dead end" : "")
-                    @if (t.RetryCount > 1)
-                    {
-                        <span class="retry-badge">retried:@t.RetryCount</span>
-                    }
+                    @t.TagName@(isDeadEndTag ? " — dead end" : "")@(t.IsUnexpected && !isDeadEndTag ? " — unexpected" : "")
                 </div>
                 <div class="tag-time">@t.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</div>
                 @if (!string.IsNullOrEmpty(t.MetadataJson))

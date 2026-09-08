@@ -3,9 +3,14 @@ using Prod_IssueTracker_POC.Web.Models;
 namespace Prod_IssueTracker_POC.Web.Services
 {
     /// <summary>
-    /// Layered-layout diagram builder — computes node/edge positions and
-    /// renders the full SVG server-side, so the Controller can hand a
-    /// ready-to-render model to the View (no client-side layout JS).
+    /// Renders the static expected flow only — a simple DAG, exactly like
+    /// the original design. No parallel "actual path" column, no arrows
+    /// routed around the diagram for deviations (both approaches ended up
+    /// as visual clutter once more than one thing went wrong). Instead, a
+    /// small red circle marker is placed just below any node that a
+    /// deviation occurred after — a quick "look here" pointer. The full
+    /// blow-by-blow (every occurrence, red/green, with metadata) lives in
+    /// the raw tag sequence list beneath this diagram, not here.
     /// </summary>
     public static class FlowDiagramLayout
     {
@@ -14,31 +19,30 @@ namespace Prod_IssueTracker_POC.Web.Services
         public static DiagramViewModel Build(
             Dictionary<string, string[]> flowMap,
             HashSet<string> terminalTags,
-            List<TagDto> tagSequence,
+            List<TagDto> tagSequence, // annotated by FlowValidator — each entry's IsUnexpected reflects that specific occurrence
             bool deadEnd,
-            string? lastValidTag,
-            string? unexpectedTag)
+            string? lastValidTag)
         {
-            var allNodes = new HashSet<string>();
+            var knownNodes = new HashSet<string>();
             foreach (var kv in flowMap)
             {
-                allNodes.Add(kv.Key);
-                foreach (var v in kv.Value) allNodes.Add(v);
+                knownNodes.Add(kv.Key);
+                foreach (var v in kv.Value) knownNodes.Add(v);
             }
-            foreach (var t in terminalTags) allNodes.Add(t);
+            foreach (var t in terminalTags) knownNodes.Add(t);
 
-            var incoming = allNodes.ToDictionary(n => n, _ => 0);
+            var incoming = knownNodes.ToDictionary(n => n, _ => 0);
             foreach (var kv in flowMap)
                 foreach (var v in kv.Value)
                     incoming[v] = incoming.GetValueOrDefault(v) + 1;
 
-            var roots = allNodes.Where(n => incoming[n] == 0).ToList();
+            var roots = knownNodes.Where(n => incoming[n] == 0).ToList();
             var level = new Dictionary<string, int>();
             foreach (var r in roots) level[r] = 0;
 
             var queue = new Queue<string>(roots);
             int iterations = 0;
-            int maxIterations = allNodes.Count * allNodes.Count + 10;
+            int maxIterations = knownNodes.Count * knownNodes.Count + 10;
             while (queue.Count > 0 && iterations++ < maxIterations)
             {
                 var n = queue.Dequeue();
@@ -53,10 +57,10 @@ namespace Prod_IssueTracker_POC.Web.Services
                     }
                 }
             }
-            foreach (var n in allNodes)
+            foreach (var n in knownNodes)
                 if (!level.ContainsKey(n)) level[n] = 0;
 
-            var byLevel = allNodes.GroupBy(n => level[n]).OrderBy(g => g.Key).ToList();
+            var byLevel = knownNodes.GroupBy(n => level[n]).OrderBy(g => g.Key).ToList();
 
             var positions = new Dictionary<string, (double X, double Y)>();
             foreach (var group in byLevel)
@@ -66,20 +70,28 @@ namespace Prod_IssueTracker_POC.Web.Services
                     positions[names[idx]] = (idx * ColWidth + LeftPad, group.Key * RowHeight + TopPad);
             }
 
-            var reachedTags = tagSequence.Select(t => t.TagName).ToList();
-            var reachedSet = new HashSet<string>(reachedTags);
+            var reachedSet = new HashSet<string>(tagSequence.Select(t => t.TagName));
             var traversedEdges = new HashSet<string>();
-            for (int i = 0; i < reachedTags.Count - 1; i++)
-                traversedEdges.Add(reachedTags[i] + "->" + reachedTags[i + 1]);
+            for (int i = 0; i < tagSequence.Count - 1; i++)
+                traversedEdges.Add(tagSequence[i].TagName + "->" + tagSequence[i + 1].TagName);
 
-            // Total occurrences of each tag name across the WHOLE sequence —
-            // catches both consecutive retries (already merged into one entry
-            // with RetryCount>1 by CollapseConsecutiveDuplicates) and
-            // non-consecutive loop-backs (A->B->A, counted as 2 separate
-            // entries for A, each with RetryCount=1, summing to 2 total).
             var retryCounts = tagSequence
                 .GroupBy(t => t.TagName)
                 .ToDictionary(g => g.Key, g => g.Sum(t => t.RetryCount));
+
+            // For each deviation in the actual sequence, note which KNOWN
+            // node it happened right after (so a marker can be placed near
+            // something visible on this diagram). Deviations following an
+            // unknown/foreign tag have nowhere to attach on this diagram —
+            // that's fine, the raw list below still shows them clearly.
+            var deviationsAfterNode = new Dictionary<string, int>();
+            for (int i = 0; i < tagSequence.Count - 1; i++)
+            {
+                if (!tagSequence[i + 1].IsUnexpected) continue;
+                var afterNode = tagSequence[i].TagName;
+                if (!positions.ContainsKey(afterNode)) continue;
+                deviationsAfterNode[afterNode] = deviationsAfterNode.GetValueOrDefault(afterNode) + 1;
+            }
 
             var deadEndTag = deadEnd ? lastValidTag : null;
 
@@ -90,7 +102,7 @@ namespace Prod_IssueTracker_POC.Web.Services
                 Y = kv.Value.Y,
                 IsReached = reachedSet.Contains(kv.Key),
                 IsDeadEnd = kv.Key == deadEndTag,
-                IsUnexpected = kv.Key == unexpectedTag,
+                IsUnexpected = false,
                 RetryCount = retryCounts.GetValueOrDefault(kv.Key, 1)
             }).ToList();
 
@@ -117,65 +129,12 @@ namespace Prod_IssueTracker_POC.Web.Services
                 }
             }
 
-            // Retry loop-back edges: transitions that actually happened in
-            // the sequence but aren't part of the static flow map above — a
-            // step that failed and routed back to an earlier step it's
-            // retrying (e.g. CommitFailed -> CommitRequested). FlowValidator
-            // treats these as legitimate (see the "seen before" rule), but
-            // without this, they'd be completely invisible in the diagram —
-            // same-tag consecutive repeats (A->A) are excluded here since
-            // those are already merged into one node with a "retried:N"
-            // badge and need no separate arrow.
-            var retryEdgeCounts = new Dictionary<(string From, string To), int>();
-            var retryEdgeOrder = new List<(string From, string To)>();
-            for (int i = 0; i < tagSequence.Count - 1; i++)
-            {
-                var cur = tagSequence[i].TagName;
-                var nxt = tagSequence[i + 1].TagName;
-                if (cur == nxt) continue;
-                var isNormalEdge = flowMap.TryGetValue(cur, out var allowedHere) && allowedHere.Contains(nxt);
-                if (isNormalEdge) continue;
-                if (!positions.ContainsKey(cur) || !positions.ContainsKey(nxt)) continue;
-
-                var key = (cur, nxt);
-                if (!retryEdgeCounts.ContainsKey(key)) retryEdgeOrder.Add(key);
-                retryEdgeCounts[key] = retryEdgeCounts.GetValueOrDefault(key) + 1;
-            }
-
-            var maxNodeRight = positions.Count > 0 ? positions.Values.Max(p => p.X) + NodeW : LeftPad + NodeW;
-            for (int i = 0; i < retryEdgeOrder.Count; i++)
-            {
-                var (fromId, toId) = retryEdgeOrder[i];
-                var from = positions[fromId];
-                var to = positions[toId];
-                var laneX = maxNodeRight + 30 + i * 30;
-
-                edges.Add(new FlowEdgeViewModel
-                {
-                    FromId = fromId,
-                    ToId = toId,
-                    IsTraversed = true,
-                    IsRetryLoopBack = true,
-                    OccurrenceCount = retryEdgeCounts[(fromId, toId)],
-                    LaneX = laneX,
-                    X1 = from.X + NodeW,
-                    Y1 = from.Y + NodeH / 2,
-                    X2 = to.X + NodeW,
-                    Y2 = to.Y + NodeH / 2
-                });
-            }
-
-            var retryLaneCount = retryEdgeOrder.Count;
-
             var maxLevel = level.Values.DefaultIfEmpty(0).Max();
-            var maxWidth = byLevel.Count > 0 ? byLevel.Max(g => g.Count()) : 1;
-            var baseWidth = maxWidth * ColWidth + LeftPad;
-            var width = retryLaneCount > 0
-                ? Math.Max(baseWidth, maxNodeRight + retryLaneCount * 30 + 40)
-                : baseWidth;
+            var maxRowWidth = byLevel.Count > 0 ? byLevel.Max(g => g.Count()) : 1;
+            var width = maxRowWidth * ColWidth + LeftPad;
             var height = (maxLevel + 1) * RowHeight + TopPad + 45;
 
-            var svg = RenderSvg(nodes, edges, width, height);
+            var svg = RenderSvg(nodes, edges, deviationsAfterNode, width, height);
 
             return new DiagramViewModel
             {
@@ -187,17 +146,19 @@ namespace Prod_IssueTracker_POC.Web.Services
             };
         }
 
-        private static string RenderSvg(List<FlowNodeViewModel> nodes, List<FlowEdgeViewModel> edges, double width, double height)
+        private static string RenderSvg(
+            List<FlowNodeViewModel> nodes, List<FlowEdgeViewModel> edges,
+            Dictionary<string, int> deviationsAfterNode,
+            double width, double height)
         {
             var sb = new System.Text.StringBuilder();
             sb.Append($"<svg viewBox=\"0 0 {Fmt(width)} {Fmt(height)}\" xmlns=\"http://www.w3.org/2000/svg\" style=\"width:100%;height:auto;\">");
             sb.Append("<defs>");
             sb.Append("<marker id=\"arrow-ok\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#2ecc71\" /></marker>");
             sb.Append("<marker id=\"arrow-dim\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#3a4150\" /></marker>");
-            sb.Append("<marker id=\"arrow-retry\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#f0a93a\" /></marker>");
             sb.Append("</defs>");
 
-            foreach (var e in edges.Where(e => !e.IsRetryLoopBack))
+            foreach (var e in edges)
             {
                 var color = e.IsTraversed ? "#2ecc71" : "#3a4150";
                 var marker = e.IsTraversed ? "url(#arrow-ok)" : "url(#arrow-dim)";
@@ -212,26 +173,9 @@ namespace Prod_IssueTracker_POC.Web.Services
                 }
             }
 
-            // Retry loop-back edges: routed out to the right of the diagram
-            // in their own "lane" so multiple back-edges don't overlap each
-            // other or cross through unrelated nodes. Amber + dashed to read
-            // clearly as "this is a retry path", not a normal flow step.
-            foreach (var e in edges.Where(e => e.IsRetryLoopBack))
-            {
-                sb.Append($"<path d=\"M {Fmt(e.X1)} {Fmt(e.Y1)} C {Fmt(e.LaneX)} {Fmt(e.Y1)}, {Fmt(e.LaneX)} {Fmt(e.Y2)}, {Fmt(e.X2)} {Fmt(e.Y2)}\" fill=\"none\" stroke=\"#f0a93a\" stroke-width=\"2\" stroke-dasharray=\"5,3\" marker-end=\"url(#arrow-retry)\" />");
-
-                if (e.OccurrenceCount > 1)
-                {
-                    var midY = e.Y1 + (e.Y2 - e.Y1) / 2;
-                    var label = $"×{e.OccurrenceCount}";
-                    sb.Append($"<rect x=\"{Fmt(e.LaneX - 14)}\" y=\"{Fmt(midY - 8)}\" width=\"28\" height=\"14\" rx=\"7\" fill=\"#2b2211\" stroke=\"#f0a93a\" stroke-width=\"1\" />");
-                    sb.Append($"<text x=\"{Fmt(e.LaneX)}\" y=\"{Fmt(midY + 3)}\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"10\" font-weight=\"600\" fill=\"#f0a93a\">{System.Net.WebUtility.HtmlEncode(label)}</text>");
-                }
-            }
-
             foreach (var n in nodes)
             {
-                var isBad = n.IsDeadEnd || n.IsUnexpected;
+                var isBad = n.IsDeadEnd;
                 var fill = isBad ? "#2b1414" : (n.IsReached ? "#12271c" : "transparent");
                 var stroke = isBad ? "#ef5350" : (n.IsReached ? "#2ecc71" : "#3a4150");
                 var textColor = isBad ? "#ef5350" : (n.IsReached ? "#2ecc71" : "#5c6577");
@@ -248,10 +192,6 @@ namespace Prod_IssueTracker_POC.Web.Services
                     sb.Append($"<text x=\"{Fmt(n.X + 75)}\" y=\"{Fmt(lineY)}\" text-anchor=\"middle\" font-family=\"SFMono-Regular,Consolas,monospace\" font-size=\"10\" font-weight=\"600\" fill=\"{textColor}\">{System.Net.WebUtility.HtmlEncode(labelLines[li])}</text>");
                 }
 
-                // Extra annotation lines stack below the node: retry badge
-                // first (if any), then the dead-end label (if any) — a node
-                // can in principle be both (retried a few times, then the
-                // final attempt still didn't reach a terminal tag).
                 var belowY = n.Y + NodeH + 14;
 
                 if (n.RetryCount > 1)
@@ -266,6 +206,26 @@ namespace Prod_IssueTracker_POC.Web.Services
                 if (n.IsDeadEnd)
                 {
                     sb.Append($"<text x=\"{Fmt(n.X + 75)}\" y=\"{Fmt(belowY)}\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"10\" fill=\"#ef5350\">dead end</text>");
+                    belowY += 14;
+                }
+
+                // Small red circle marker: "an unexpected tag followed this
+                // node at least once — see the raw list below for exactly
+                // what and when." Deliberately minimal — no attempt to draw
+                // where the deviation actually went.
+                if (deviationsAfterNode.TryGetValue(n.Id, out var devCount))
+                {
+                    var cx = n.X + 75;
+                    var cy = belowY + 4;
+                    sb.Append($"<circle cx=\"{Fmt(cx)}\" cy=\"{Fmt(cy)}\" r=\"7\" fill=\"#ef5350\" />");
+                    if (devCount > 1)
+                    {
+                        sb.Append($"<text x=\"{Fmt(cx)}\" y=\"{Fmt(cy + 3)}\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"9\" font-weight=\"700\" fill=\"#0f1115\">{devCount}</text>");
+                    }
+                    else
+                    {
+                        sb.Append($"<text x=\"{Fmt(cx)}\" y=\"{Fmt(cy + 3)}\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"10\" font-weight=\"700\" fill=\"#0f1115\">!</text>");
+                    }
                 }
             }
 

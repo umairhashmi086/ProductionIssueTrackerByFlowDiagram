@@ -9,12 +9,13 @@ namespace Prod_IssueTracker_POC.Web.Models
         public string TagName { get; set; } = "";
         public DateTimeOffset Timestamp { get; set; }
         public string? MetadataJson { get; set; }
-
-        // >1 when this tag was logged multiple times consecutively — a saga
-        // step being retried, not a real flow deviation. Set by
-        // FlowValidator.CollapseConsecutiveDuplicates before validation runs,
-        // so the adjacency check never sees the repeats directly.
         public int RetryCount { get; set; } = 1;
+
+        // True when THIS specific occurrence was reached via a transition
+        // that wasn't expected/tolerated — lets the raw list and diagram
+        // show exactly which step(s) went wrong, even if the flow recovers
+        // to valid tags afterward.
+        public bool IsUnexpected { get; set; }
     }
 
     public class AttemptDto
@@ -25,9 +26,10 @@ namespace Prod_IssueTracker_POC.Web.Models
         public bool IsHealthy { get; set; }
         public string? LastValidTag { get; set; }
         public bool DeadEnd { get; set; }
-        public string? UnexpectedTag { get; set; }
+        public bool HasDeviations { get; set; }
         public string? CrossAttemptLink { get; set; }
         public List<TagDto> TagSequence { get; set; } = new();
+        public int DeviationCount => TagSequence.Count(t => t.IsUnexpected);
     }
 
     // --- Server-computed diagram layout (built in the Controller, bound to the View) ---
@@ -54,14 +56,6 @@ namespace Prod_IssueTracker_POC.Web.Models
         public double X2 { get; set; }
         public double Y2 { get; set; }
         public bool SameRow { get; set; }
-
-        // A retry loop-back edge: a transition that actually happened in the
-        // sequence but isn't part of the static flow map (e.g. an exception
-        // step routing back to the step it's retrying). Drawn as a distinct
-        // routed arrow around the side, not a normal straight/curved edge.
-        public bool IsRetryLoopBack { get; set; }
-        public int OccurrenceCount { get; set; } = 1;
-        public double LaneX { get; set; }
     }
 
     public class DiagramViewModel

@@ -45,15 +45,16 @@ namespace Prod_IssueTracker_POC.Web.Controllers
                 ? flow
                 : (new Dictionary<string, string[]>(), new HashSet<string>());
 
-            // Validate every attempt, ordered chronologically by its first tag.
-            // Collapse consecutive duplicate tags FIRST (saga retries), so
-            // both validation and display (raw list + diagram) agree on the
-            // same collapsed sequence with retry counts attached.
+            // Validate walks the WHOLE raw sequence and annotates every tag
+            // occurrence individually (IsUnexpected) — no pre-collapsing
+            // needed, the validator tolerates retries on its own, and it
+            // never stops early, so the flow can be shown "recovering" to
+            // green after a red deviation instead of just halting.
             var attempts = attemptsByAttemptId
                 .Select(kv =>
                 {
-                    var collapsed = FlowValidator.CollapseConsecutiveDuplicates(kv.Value);
-                    return (AttemptId: kv.Key, Tags: collapsed, Result: _validator.Validate(collapsed, flowMap, terminalTags));
+                    var result = _validator.Validate(kv.Value, flowMap, terminalTags);
+                    return (AttemptId: kv.Key, Result: result);
                 })
                 .OrderBy(a => a.Result.StartedAt)
                 .ToList();
@@ -61,7 +62,7 @@ namespace Prod_IssueTracker_POC.Web.Controllers
             var attemptDtos = new List<AttemptDto>();
             for (int i = 0; i < attempts.Count; i++)
             {
-                var (attemptId, tags, result) = attempts[i];
+                var (attemptId, result) = attempts[i];
                 var previous = i > 0 ? attempts[i - 1].Result : null;
                 var previousAttemptId = i > 0 ? attempts[i - 1].AttemptId : null;
                 var link = _validator.TryLinkToPriorAttempt(previous, previousAttemptId);
@@ -72,11 +73,11 @@ namespace Prod_IssueTracker_POC.Web.Controllers
                     AttemptId = attemptId,
                     StartedAt = result.StartedAt,
                     IsHealthy = result.IsHealthy,
-                    LastValidTag = result.LastValidTag,
+                    LastValidTag = result.LastTag,
                     DeadEnd = result.DeadEnd,
-                    UnexpectedTag = result.UnexpectedTag,
+                    HasDeviations = result.HasDeviations,
                     CrossAttemptLink = link,
-                    TagSequence = tags
+                    TagSequence = result.AnnotatedTags // raw order, each tag flagged individually
                 });
             }
 
@@ -84,7 +85,7 @@ namespace Prod_IssueTracker_POC.Web.Controllers
             var active = attemptDtos[attemptIndex];
 
             var diagram = flowMap.Count > 0
-                ? FlowDiagramLayout.Build(flowMap, terminalTags, active.TagSequence, active.DeadEnd, active.LastValidTag, active.UnexpectedTag)
+                ? FlowDiagramLayout.Build(flowMap, terminalTags, active.TagSequence, active.DeadEnd, active.LastValidTag)
                 : new DiagramViewModel();
 
             var model = new ReferenceViewModel
