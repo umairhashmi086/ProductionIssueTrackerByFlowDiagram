@@ -6,6 +6,7 @@
 
 <div class="search-row">
     <form asp-action="Reference" asp-controller="Investigate" method="get" style="display:flex; gap:8px; flex:1;">
+        <input type="hidden" name="flowName" value="@Model.FlowName" />
         <input type="text" name="referenceNumber" value="@Model.ReferenceNumber" />
         <button type="submit">Investigate</button>
     </form>
@@ -24,10 +25,11 @@
         var activeCls = i == Model.ActiveAttemptIndex ? "active" : "";
         <a class="attempt-tab @cls @activeCls"
            asp-action="Reference" asp-controller="Investigate"
-           asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-attemptIndex="@i">
+           asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-flowName="@Model.FlowName" asp-route-attemptIndex="@i">
             <div class="num">Attempt @a.AttemptNumber</div>
             <div class="time">@a.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</div>
             <div class="status @cls">@statusText</div>
+            <div class="kong-id-line">Kong ID: @a.KongId</div>
         </a>
     }
 </div>

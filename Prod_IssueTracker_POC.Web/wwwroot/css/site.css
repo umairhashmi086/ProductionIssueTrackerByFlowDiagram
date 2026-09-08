@@ -16,6 +16,13 @@ a { color: var(--accent); }
 .search-row input { flex: 1; background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 10px 12px; border-radius: 6px; font-family: var(--mono); font-size: 13px; }
 .search-row input:focus { outline: none; border-color: var(--accent); }
 .search-row button, .btn { background: var(--accent); color: #fff; border: none; padding: 10px 18px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; }
+.search-form { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 8px; flex-wrap: wrap; }
+.search-field { display: flex; flex-direction: column; gap: 4px; }
+.search-field label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
+.search-field input, .search-field select { background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 10px 12px; border-radius: 6px; font-family: var(--mono); font-size: 13px; min-width: 200px; }
+.search-field input:focus, .search-field select:focus { outline: none; border-color: var(--accent); }
+.search-form button { background: var(--accent); color: #fff; border: none; padding: 10px 18px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; height: 38px; }
+.kong-id-line { font-family: var(--mono); font-size: 10px; color: var(--text-faint); margin-top: 4px; word-break: break-all; }
 .hint { color: var(--text-faint); font-size: 12px; margin-bottom: 24px; }
 .hint code { background: var(--panel-2); padding: 1px 5px; border-radius: 3px; }
 .hint form { display: inline; }

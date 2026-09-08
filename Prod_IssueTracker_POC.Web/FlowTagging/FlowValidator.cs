@@ -81,11 +81,11 @@ namespace Prod_IssueTracker_POC.Web.FlowTagging
         /// same pattern as the original MoneyGram incident (a retry colliding
         /// with an unfinished prior attempt).
         /// </summary>
-        public string? TryLinkToPriorAttempt(AttemptValidationResult? previous, string? previousAttemptId)
+        public string? TryLinkToPriorAttempt(AttemptValidationResult? previous, string? previousKongId)
         {
             if (previous == null || !previous.DeadEnd) return null;
 
-            return $"Possible retry collision: prior attempt {previousAttemptId} never reached a terminal " +
+            return $"Possible retry collision: prior attempt {previousKongId} never reached a terminal " +
                    $"state (stuck at '{previous.LastTag}'). This attempt started afterward under the " +
                    "same reference number while that prior attempt was still unresolved.";
         }

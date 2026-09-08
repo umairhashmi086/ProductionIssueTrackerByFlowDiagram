@@ -22,10 +22,10 @@ namespace Prod_IssueTracker_POC.Controllers
         [ProducesResponseType(typeof(FeeResponse), StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<FeeResponse>> GetFee([FromQuery] FeeRequest request)
         {
-            var attemptId = HttpContext.TraceIdentifier; // unique per request — stands in for Kong's request id in the full design
-            _logger.LogInformation("GetFee API called [AttemptId={AttemptId}]", attemptId);
+            var kongId = HttpContext.TraceIdentifier; // unique per request — stands in for Kong's request id in the full design
+            _logger.LogInformation("GetFee API called [KongId={KongId}]", kongId);
 
-            var response = await _feeService.CalculateFee(request, attemptId);
+            var response = await _feeService.CalculateFee(request, kongId);
             // response.ReferenceNumber is authoritative — FeeService generates it once
             // if the caller didn't supply one, so log/return using that same value
             // rather than generating a second, different one here.

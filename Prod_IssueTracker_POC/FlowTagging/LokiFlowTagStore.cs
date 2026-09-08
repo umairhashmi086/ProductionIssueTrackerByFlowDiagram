@@ -10,7 +10,7 @@ namespace Prod_IssueTracker_POC.FlowTagging
     /// this store directly, same as the in-memory version, so nothing else in
     /// the app changes when you switch FlowTags:DataSource to "Loki".
     ///
-    /// IMPORTANT: only "app" is a Loki label below — AttemptId/ReferenceNumber/
+    /// IMPORTANT: only "app" is a Loki label below — KongId/ReferenceNumber/
     /// TagName live inside the JSON log line body and are filtered with LogQL's
     /// | json, never as labels (see the cardinality warning in the notes doc).
     /// </summary>
@@ -42,7 +42,7 @@ namespace Prod_IssueTracker_POC.FlowTagging
             {
                 var logLine = JsonSerializer.Serialize(new
                 {
-                    entry.AttemptId,
+                    entry.KongId,
                     entry.ReferenceNumber,
                     entry.FlowName,
                     entry.TagName,
@@ -78,14 +78,14 @@ namespace Prod_IssueTracker_POC.FlowTagging
             }
         }
 
-        public List<FlowTagEntry> GetByAttemptId(string attemptId)
+        public List<FlowTagEntry> GetByKongId(string kongId)
         {
             // IFlowTagStore's read methods are synchronous (matching the
             // in-memory implementation), so we block on the async HTTP call
             // here. Fine for a POC's low query volume; if you keep the Loki
             // store long-term, change IFlowTagStore's read methods to be
             // async and update InvestigateController to await them instead.
-            var query = $"{{app=\"{_appLabel}\"}} | json | AttemptId=\"{attemptId}\"";
+            var query = $"{{app=\"{_appLabel}\"}} | json | KongId=\"{kongId}\"";
             return QueryAsync(query).GetAwaiter().GetResult().OrderBy(e => e.Timestamp).ToList();
         }
 
@@ -95,7 +95,7 @@ namespace Prod_IssueTracker_POC.FlowTagging
             var entries = QueryAsync(query).GetAwaiter().GetResult();
 
             return entries
-                .GroupBy(e => e.AttemptId)
+                .GroupBy(e => e.KongId)
                 .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Timestamp).ToList());
         }
 
@@ -136,7 +136,7 @@ namespace Prod_IssueTracker_POC.FlowTagging
                         var root = lineDoc.RootElement;
 
                         results.Add(new FlowTagEntry(
-                            AttemptId: root.GetProperty("AttemptId").GetString()!,
+                            KongId: root.GetProperty("KongId").GetString()!,
                             ReferenceNumber: root.GetProperty("ReferenceNumber").GetString()!,
                             FlowName: root.GetProperty("FlowName").GetString()!,
                             TagName: root.GetProperty("TagName").GetString()!,

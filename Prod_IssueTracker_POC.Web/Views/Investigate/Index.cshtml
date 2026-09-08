@@ -1,11 +1,37 @@
+@model SearchIndexViewModel
 @{
     ViewData["Title"] = "Investigate";
 }
 
-<form asp-action="Reference" asp-controller="Investigate" method="get" class="search-row">
-    <input type="text" name="referenceNumber" placeholder="Reference number, e.g. MG-2026-00417" />
+<form asp-action="Reference" asp-controller="Investigate" method="get" class="search-form">
+    <div class="search-field">
+        <label for="flowNameSelect">Flow</label>
+        <select id="flowNameSelect" name="flowName">
+            <option value="All">All</option>
+            @foreach (var flow in Model.FlowNames)
+            {
+                <option value="@flow">@flow</option>
+            }
+        </select>
+    </div>
+
+    <div class="search-field">
+        <label for="referenceNumberInput">Reference number</label>
+        <input id="referenceNumberInput" type="text" name="referenceNumber" placeholder="e.g. MG-2026-00417" />
+    </div>
+
+    <div class="search-field">
+        <label for="kongIdInput">— or Kong ID —</label>
+        <input id="kongIdInput" type="text" name="kongId" placeholder="e.g. demo-attempt-1-a1b2c3" />
+    </div>
+
     <button type="submit">Investigate</button>
 </form>
+
+<div class="hint">
+    Fill in either Reference number or Kong ID (not both) — Kong ID looks up one specific attempt directly.
+    Picking a Flow narrows the search to that flow type only; leave it as "All flows" to search across everything.
+</div>
 
 <div class="hint">
     No data yet?

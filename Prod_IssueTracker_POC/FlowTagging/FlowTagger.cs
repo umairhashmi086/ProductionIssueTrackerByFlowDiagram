@@ -4,7 +4,7 @@ namespace Prod_IssueTracker_POC.FlowTagging
 {
     public interface IFlowTagger
     {
-        void Tag(string attemptId, string referenceNumber, string flowName, string tagName, object? metadata = null, DateTimeOffset? timestamp = null);
+        void Tag(string kongId, string referenceNumber, string flowName, string tagName, object? metadata = null, DateTimeOffset? timestamp = null);
     }
 
     /// <summary>
@@ -24,16 +24,16 @@ namespace Prod_IssueTracker_POC.FlowTagging
             _logger = logger;
         }
 
-        public void Tag(string attemptId, string referenceNumber, string flowName, string tagName, object? metadata = null, DateTimeOffset? timestamp = null)
+        public void Tag(string kongId, string referenceNumber, string flowName, string tagName, object? metadata = null, DateTimeOffset? timestamp = null)
         {
             var metadataJson = metadata != null ? JsonSerializer.Serialize(metadata) : null;
             var ts = timestamp ?? DateTimeOffset.UtcNow;
 
-            _store.Add(new FlowTagEntry(attemptId, referenceNumber, flowName, tagName, metadataJson, ts));
+            _store.Add(new FlowTagEntry(kongId, referenceNumber, flowName, tagName, metadataJson, ts));
 
             _logger.LogInformation(
-                "FlowTag {FlowName} {TagName} [{ReferenceNumber}] [{AttemptId}] {Metadata}",
-                flowName, tagName, referenceNumber, attemptId, metadataJson);
+                "FlowTag {FlowName} {TagName} [{ReferenceNumber}] [{KongId}] {Metadata}",
+                flowName, tagName, referenceNumber, kongId, metadataJson);
         }
     }
 }

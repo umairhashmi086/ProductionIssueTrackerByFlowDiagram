@@ -38,32 +38,32 @@ namespace Prod_IssueTracker_POC.Controllers
             // is exactly the "A->B->A->B->A->C" shape the retry-loop-back
             // rule in FlowValidator is meant to handle without flagging a
             // false deviation, before finally timing out for good.
-            var attempt1 = "demo-attempt-1-" + Guid.NewGuid().ToString("N").Substring(0, 6);
+            var kongId1 = "demo-attempt-1-" + Guid.NewGuid().ToString("N").Substring(0, 6);
             var t0 = now.AddMinutes(-10);
-            Emit(attempt1, reference, "ValidationSuccess", t0);
-            Emit(attempt1, reference, "RemittanceCreated", t0.AddSeconds(1));
-            Emit(attempt1, reference, "AccountServiceInitiated", t0.AddSeconds(2));
-            Emit(attempt1, reference, "CommitRequested", t0.AddSeconds(3), new { attempt = 1 });
-            Emit(attempt1, reference, "CommitFailed", t0.AddSeconds(5), new { reason = "transient network error" });
-            Emit(attempt1, reference, "CommitRequested", t0.AddSeconds(8), new { attempt = 2 });
-            Emit(attempt1, reference, "CommitFailed", t0.AddSeconds(10), new { reason = "transient network error" });
-            Emit(attempt1, reference, "CommitRequested", t0.AddSeconds(13), new { attempt = 3 });
-            Emit(attempt1, reference, "CommitTimeout", t0.AddSeconds(28), new { waitedSeconds = 15 });
-            Emit(attempt1, reference, "StatusUpdateAttempted", t0.AddSeconds(29));
-            Emit(attempt1, reference, "StatusUpdateFailed", t0.AddSeconds(29.5),
+            Emit(kongId1, reference, "ValidationSuccess", t0);
+            Emit(kongId1, reference, "RemittanceCreated", t0.AddSeconds(1));
+            Emit(kongId1, reference, "AccountServiceInitiated", t0.AddSeconds(2));
+            Emit(kongId1, reference, "CommitRequested", t0.AddSeconds(3), new { attempt = 1 });
+            Emit(kongId1, reference, "CommitFailed", t0.AddSeconds(5), new { reason = "transient network error" });
+            Emit(kongId1, reference, "CommitRequested", t0.AddSeconds(8), new { attempt = 2 });
+            Emit(kongId1, reference, "CommitFailed", t0.AddSeconds(10), new { reason = "transient network error" });
+            Emit(kongId1, reference, "CommitRequested", t0.AddSeconds(13), new { attempt = 3 });
+            Emit(kongId1, reference, "CommitTimeout", t0.AddSeconds(28), new { waitedSeconds = 15 });
+            Emit(kongId1, reference, "StatusUpdateAttempted", t0.AddSeconds(29));
+            Emit(kongId1, reference, "StatusUpdateFailed", t0.AddSeconds(29.5),
                 new { reason = "ArgumentException: reasonCode cannot be null for status 'Failed'" });
             // (deliberately no further tag — this is the dead end)
 
             // --- Attempt 2: retried ~7 minutes later, same reference ---
-            var attempt2 = "demo-attempt-2-" + Guid.NewGuid().ToString("N").Substring(0, 6);
+            var kongId2 = "demo-attempt-2-" + Guid.NewGuid().ToString("N").Substring(0, 6);
             var t1 = now.AddMinutes(-3);
-            Emit(attempt2, reference, "ValidationSuccess", t1);
+            Emit(kongId2, reference, "ValidationSuccess", t1);
             // Jumps straight to CommitRequested — representing the system
             // short-circuiting because the provider still held the reference
             // active from attempt 1. This is an unexpected transition against
             // the flow map (ValidationSuccess should be followed by
             // RemittanceCreated), which the validator will correctly flag.
-            Emit(attempt2, reference, "CommitRequested", t1.AddSeconds(1),
+            Emit(kongId2, reference, "CommitRequested", t1.AddSeconds(1),
                 new { reason = "MoneyGram returned Duplicate Reference error" });
 
             return Ok(new
@@ -75,9 +75,9 @@ namespace Prod_IssueTracker_POC.Controllers
             });
         }
 
-        private void Emit(string attemptId, string referenceNumber, string tagName, DateTimeOffset timestamp, object? metadata = null)
+        private void Emit(string kongId, string referenceNumber, string tagName, DateTimeOffset timestamp, object? metadata = null)
         {
-            _flowTagger.Tag(attemptId, referenceNumber, FlowMaps.MoneyGramTransaction, tagName, metadata, timestamp);
+            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.MoneyGramTransaction, tagName, metadata, timestamp);
         }
     }
 }

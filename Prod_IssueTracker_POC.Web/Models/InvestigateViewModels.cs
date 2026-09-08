@@ -21,7 +21,7 @@ namespace Prod_IssueTracker_POC.Web.Models
     public class AttemptDto
     {
         public int AttemptNumber { get; set; }
-        public string AttemptId { get; set; } = "";
+        public string KongId { get; set; } = "";
         public DateTimeOffset StartedAt { get; set; }
         public bool IsHealthy { get; set; }
         public string? LastValidTag { get; set; }
@@ -83,5 +83,11 @@ namespace Prod_IssueTracker_POC.Web.Models
         public int ActiveAttemptIndex { get; set; }
         public AttemptDto ActiveAttempt => Attempts[ActiveAttemptIndex];
         public DiagramViewModel Diagram { get; set; } = new();
+    }
+
+    /// <summary>Search form model — lets the person filter by flow type and choose whether they're searching by reference number or Kong ID.</summary>
+    public class SearchIndexViewModel
+    {
+        public List<string> FlowNames { get; set; } = new();
     }
 }

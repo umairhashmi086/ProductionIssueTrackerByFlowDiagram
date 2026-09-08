@@ -7,7 +7,7 @@ namespace Prod_IssueTracker_POC.Web.Services
     /// Queries Loki's HTTP API directly. This is the key piece of the
     /// decoupling: the investigator no longer asks any producer service for
     /// its data — it reads straight from the shared log store. Any service
-    /// that pushes tags into Loki under the same JSON shape (AttemptId,
+    /// that pushes tags into Loki under the same JSON shape (KongId,
     /// ReferenceNumber, FlowName, TagName, Metadata) is investigable here,
     /// with zero code changes to this client and zero dependency on that
     /// service's own API.
@@ -25,16 +25,39 @@ namespace Prod_IssueTracker_POC.Web.Services
             _appLabel = config["Loki:AppLabel"] ?? "poc-feeservice";
         }
 
-        public async Task<Dictionary<string, List<TagDto>>> GetAttemptsByReferenceAsync(string referenceNumber)
+        /// <summary>
+        /// All attempts (grouped by KongId) sharing a reference number.
+        /// Passing flowName narrows the Loki query itself (not just a UI
+        /// filter) — useful if the same reference-number scheme could ever
+        /// collide across different flow types sharing one Loki instance.
+        /// </summary>
+        public async Task<Dictionary<string, List<TagDto>>> GetAttemptsByReferenceAsync(string referenceNumber, string? flowName = null)
         {
-            var query = $"{{app=\"{_appLabel}\"}} | json | ReferenceNumber=\"{referenceNumber}\"";
+            var query = BuildQuery($"ReferenceNumber=\"{referenceNumber}\"", flowName);
             var entries = await QueryAsync(query);
 
             return entries
-                .GroupBy(e => e.AttemptId)
+                .GroupBy(e => e.KongId)
                 .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Timestamp)
                     .Select(e => new TagDto { TagName = e.TagName, Timestamp = e.Timestamp, MetadataJson = e.MetadataJson })
                     .ToList());
+        }
+
+        /// <summary>
+        /// A single attempt's full tag sequence, looked up directly by its
+        /// Kong ID rather than by reference number — useful when you already
+        /// have a specific request's correlation ID (e.g. from a log line or
+        /// an error report) and want to jump straight to it.
+        /// </summary>
+        public async Task<(string? ReferenceNumber, List<TagDto> Tags)> GetByKongIdAsync(string kongId, string? flowName = null)
+        {
+            var query = BuildQuery($"KongId=\"{kongId}\"", flowName);
+            var entries = await QueryAsync(query);
+            var ordered = entries.OrderBy(e => e.Timestamp).ToList();
+
+            var referenceNumber = ordered.FirstOrDefault()?.ReferenceNumber;
+            var tags = ordered.Select(e => new TagDto { TagName = e.TagName, Timestamp = e.Timestamp, MetadataJson = e.MetadataJson }).ToList();
+            return (referenceNumber, tags);
         }
 
         /// <summary>
@@ -44,12 +67,18 @@ namespace Prod_IssueTracker_POC.Web.Services
         /// </summary>
         public async Task<string?> GetFlowNameAsync(string referenceNumber)
         {
-            var query = $"{{app=\"{_appLabel}\"}} | json | ReferenceNumber=\"{referenceNumber}\"";
+            var query = BuildQuery($"ReferenceNumber=\"{referenceNumber}\"", null);
             var entries = await QueryAsync(query);
             return entries.OrderBy(e => e.Timestamp).FirstOrDefault()?.FlowName;
         }
 
-        private record RawEntry(string AttemptId, string ReferenceNumber, string FlowName, string TagName, string? MetadataJson, DateTimeOffset Timestamp);
+        private string BuildQuery(string filterClause, string? flowName)
+        {
+            var flowClause = string.IsNullOrWhiteSpace(flowName) ? "" : $" | FlowName=\"{flowName}\"";
+            return $"{{app=\"{_appLabel}\"}} | json | {filterClause}{flowClause}";
+        }
+
+        private record RawEntry(string KongId, string ReferenceNumber, string FlowName, string TagName, string? MetadataJson, DateTimeOffset Timestamp);
 
         private async Task<List<RawEntry>> QueryAsync(string logQlQuery)
         {
@@ -82,7 +111,7 @@ namespace Prod_IssueTracker_POC.Web.Services
                     var root = lineDoc.RootElement;
 
                     results.Add(new RawEntry(
-                        AttemptId: root.GetProperty("AttemptId").GetString()!,
+                        KongId: root.GetProperty("KongId").GetString()!,
                         ReferenceNumber: root.GetProperty("ReferenceNumber").GetString()!,
                         FlowName: root.GetProperty("FlowName").GetString()!,
                         TagName: root.GetProperty("TagName").GetString()!,
