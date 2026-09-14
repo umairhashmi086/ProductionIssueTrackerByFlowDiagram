@@ -1,0 +1,25 @@
+@model CreateFlowDefinitionViewModel
+@{
+    ViewData["Title"] = "New Flow Definition";
+}
+
+<div class="section-label" style="margin-top:0;">New Flow Definition</div>
+
+<form asp-action="Create" asp-controller="FlowDefinition" method="post" style="display:flex; flex-direction:column; gap:14px; max-width:480px;">
+    <div class="search-field">
+        <label for="flowNameInput">Flow name</label>
+        <input id="flowNameInput" asp-for="FlowName" placeholder="e.g. RemittancePayoutFlow" style="min-width: 100%;" />
+        <span asp-validation-for="FlowName" style="color:var(--danger); font-size:12px;"></span>
+    </div>
+    <div class="search-field">
+        <label for="descriptionInput">Description (optional)</label>
+        <input id="descriptionInput" asp-for="Description" placeholder="What this flow represents" style="min-width: 100%;" />
+    </div>
+    <div>
+        <button type="submit">Create</button>
+    </div>
+</form>
+
+<div class="hint" style="margin-top:24px;">
+    <a asp-action="Index" asp-controller="FlowDefinition">← Back to Flow Definitions</a>
+</div>

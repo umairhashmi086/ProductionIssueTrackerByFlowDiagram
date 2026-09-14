@@ -1,0 +1,56 @@
+@model List<TagRow>
+@{
+    ViewData["Title"] = "Tag Library";
+}
+
+<div class="section-label" style="margin-top:0;">Tag Library</div>
+<p class="hint" style="margin-bottom:16px;">
+    Add a tag once here, then reuse it across any flow in the visual builder — no need to retype the same name for every flow.
+</p>
+
+@if (TempData["DeleteError"] != null)
+{
+    <div class="health-banner bad" style="margin-bottom:16px;">@TempData["DeleteError"]</div>
+}
+
+<form asp-action="Create" asp-controller="Tag" method="post" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:24px;">
+    <div class="search-field">
+        <label for="newTagNameInput">New tag name</label>
+        <input id="newTagNameInput" name="tagName" placeholder="e.g. ValidationSuccess" required />
+    </div>
+    <button type="submit">Add Tag</button>
+</form>
+
+@if (Model.Count == 0)
+{
+    <div class="empty">No tags yet — add the first one above.</div>
+}
+else
+{
+    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+            <tr style="color:var(--text-faint); font-size:11px; text-transform:uppercase;">
+                <th style="text-align:left; padding:6px 8px;">Tag name</th>
+                <th style="padding:6px 8px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var t in Model)
+            {
+                <tr style="border-top:1px solid var(--border);">
+                    <td style="padding:8px; font-family:var(--mono);">@t.TagName</td>
+                    <td style="padding:8px; text-align:right;">
+                        <form asp-action="Delete" asp-controller="Tag" method="post" style="display:inline;" onsubmit="return confirm('Delete this tag? Only works if it is not used in any flow.');">
+                            <input type="hidden" name="id" value="@t.Id" />
+                            <button type="submit" class="linklike" style="color:var(--danger);">remove</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<div class="hint" style="margin-top:24px;">
+    <a asp-action="Index" asp-controller="FlowDefinition">← Back to Flow Definitions</a>
+</div>

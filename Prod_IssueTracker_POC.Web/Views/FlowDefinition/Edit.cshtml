@@ -1,0 +1,459 @@
+@model FlowDefinitionDetailViewModel
+@{
+    ViewData["Title"] = Model.FlowName;
+    var initialJson = System.Text.Json.JsonSerializer.Serialize(new
+    {
+        flowDefinitionId = Model.Id,
+        nodes = Model.Tags.Select(t => new { tagName = t.TagName, isTerminal = t.IsTerminal, x = t.PosX, y = t.PosY }),
+        edges = Model.Transitions.Select(t => new { from = t.FromTagName, to = t.ToTagName })
+    });
+    var availableTagsJson = System.Text.Json.JsonSerializer.Serialize(
+        Model.AvailableTags.Select(t => new { id = t.Id, tagName = t.TagName }));
+}
+
+<div class="section-label" style="margin-top:0;">@Model.FlowName</div>
+@if (!string.IsNullOrEmpty(Model.Description))
+{
+    <p class="hint">@Model.Description</p>
+}
+
+<div id="builderError" class="health-banner bad" style="display:none; margin-bottom:16px;"></div>
+
+<div class="builder-toolbar">
+    <button type="button" id="modeSelect" class="mode-btn active">Select / Drag</button>
+    <button type="button" id="modeAdd" class="mode-btn">+ Add Tag</button>
+    <button type="button" id="modeConnect" class="mode-btn">🔗 Connect</button>
+    <button type="button" id="modeTerminal" class="mode-btn">⭐ Toggle Terminal</button>
+    <button type="button" id="modeDelete" class="mode-btn">🗑 Delete</button>
+    <span class="toolbar-gap"></span>
+    <button type="button" id="saveBtn" class="save-btn">💾 Save</button>
+    <span id="saveStatus" class="save-status"></span>
+</div>
+<div class="hint" id="modeHint">
+    Click empty canvas to place a node in the current mode. Drag nodes to reposition (Select mode). Double-click a node's label to rename it.
+</div>
+<div class="hint">
+    <a asp-action="Index" asp-controller="Tag">Manage the tag library →</a>
+</div>
+
+<div class="builder-canvas-wrap">
+    <svg id="builderSvg" width="1400" height="900">
+        <defs>
+            <marker id="b-arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#4f8cff" />
+            </marker>
+        </defs>
+        <g id="edgesLayer"></g>
+        <g id="nodesLayer"></g>
+    </svg>
+</div>
+
+<div id="tagPicker" class="tag-picker" style="display:none;">
+    <select id="tagPickerSelect"></select>
+    <input id="tagPickerNewInput" type="text" placeholder="New tag name" style="display:none;" />
+    <div class="tag-picker-buttons">
+        <button type="button" id="tagPickerAdd" class="mode-btn">Add</button>
+        <button type="button" id="tagPickerCancel" class="mode-btn">Cancel</button>
+    </div>
+</div>
+
+<div id="renameBox" class="tag-picker" style="display:none;">
+    <input id="renameInput" type="text" />
+    <div class="tag-picker-buttons">
+        <button type="button" id="renameConfirm" class="mode-btn">Rename</button>
+        <button type="button" id="renameCancel" class="mode-btn">Cancel</button>
+    </div>
+</div>
+
+<div class="hint" style="margin-top:16px;">
+    <a asp-action="Index" asp-controller="FlowDefinition">← Back to Flow Definitions</a>
+    &nbsp;·&nbsp;
+    <a asp-action="Index" asp-controller="Investigate">Go to Investigate</a>
+</div>
+
+<script id="initialData" type="application/json">@Html.Raw(initialJson)</script>
+<script id="availableTagsData" type="application/json">@Html.Raw(availableTagsJson)</script>
+<script>
+try {
+(function () {
+    const initial = JSON.parse(document.getElementById('initialData').textContent);
+    let nodes = initial.nodes.map(n => ({ ...n }));
+    let edges = initial.edges.map(e => ({ ...e }));
+    const flowDefinitionId = initial.flowDefinitionId;
+    let availableTags = JSON.parse(document.getElementById('availableTagsData').textContent);
+
+    const NODE_W = 150, NODE_H = 46;
+    let mode = 'select';
+    let connectFrom = null;
+    let dragging = null; // { tagName, offsetX, offsetY }
+    let pendingClickPos = null; // svg-space coords for where a new node will be placed
+
+    const svg = document.getElementById('builderSvg');
+    const nodesLayer = document.getElementById('nodesLayer');
+    const edgesLayer = document.getElementById('edgesLayer');
+    const modeHint = document.getElementById('modeHint');
+
+    const modeButtons = {
+        select: document.getElementById('modeSelect'),
+        add: document.getElementById('modeAdd'),
+        connect: document.getElementById('modeConnect'),
+        terminal: document.getElementById('modeTerminal'),
+        delete: document.getElementById('modeDelete'),
+    };
+    const hints = {
+        select: "Click empty canvas to place a node. Drag nodes to reposition. Double-click a node's label to rename it.",
+        add: 'Click anywhere on the canvas to add a tag there.',
+        connect: 'Click a node to start a connection, then click another node to link them. Click the same node again to cancel.',
+        terminal: 'Click a node to toggle whether it\u2019s a terminal (valid ending) state.',
+        delete: 'Click a node to remove it (and its connections), or click a connecting line to remove just that link.',
+    };
+
+    function setMode(m) {
+        mode = m;
+        connectFrom = null;
+        Object.entries(modeButtons).forEach(([key, btn]) => btn.classList.toggle('active', key === m));
+        modeHint.textContent = hints[m];
+        render();
+    }
+    Object.entries(modeButtons).forEach(([key, btn]) => btn.addEventListener('click', () => setMode(key)));
+
+    function svgPoint(evt) {
+        const rect = svg.getBoundingClientRect();
+        return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
+    }
+
+    function findNode(tagName) { return nodes.find(n => n.tagName === tagName); }
+
+    function labelLines(id) {
+        return id.replace(/([a-z])([A-Z])/g, '$1\n$2').split('\n');
+    }
+
+    // Point where a line from a box's center toward (tx,ty) crosses the
+    // box's own boundary — lets a connector stop AT the edge instead of
+    // going center-to-center (which hides the arrowhead behind the
+    // destination box, since nodes render on top of edges).
+    function clipToBox(cx, cy, tx, ty, halfW, halfH) {
+        const dx = tx - cx, dy = ty - cy;
+        if (dx === 0 && dy === 0) return { x: cx, y: cy };
+        const scaleX = dx !== 0 ? halfW / Math.abs(dx) : Infinity;
+        const scaleY = dy !== 0 ? halfH / Math.abs(dy) : Infinity;
+        const scale = Math.min(scaleX, scaleY);
+        return { x: cx + dx * scale, y: cy + dy * scale };
+    }
+
+    function render() {
+        renderEdges();
+        renderNodes();
+    }
+
+    function renderEdges() {
+        edgesLayer.innerHTML = '';
+        edges.forEach((e, idx) => {
+            const from = findNode(e.from), to = findNode(e.to);
+            if (!from || !to) return;
+            const c1x = from.x + NODE_W / 2, c1y = from.y + NODE_H / 2;
+            const c2x = to.x + NODE_W / 2, c2y = to.y + NODE_H / 2;
+            const p1 = clipToBox(c1x, c1y, c2x, c2y, NODE_W / 2, NODE_H / 2);
+            const p2 = clipToBox(c2x, c2y, c1x, c1y, NODE_W / 2, NODE_H / 2);
+
+            const hit = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            hit.setAttribute('x1', p1.x); hit.setAttribute('y1', p1.y);
+            hit.setAttribute('x2', p2.x); hit.setAttribute('y2', p2.y);
+            hit.setAttribute('stroke', 'transparent');
+            hit.setAttribute('stroke-width', '14');
+            hit.style.cursor = mode === 'delete' ? 'pointer' : 'default';
+            hit.addEventListener('click', (evt) => { evt.stopPropagation(); onEdgeClick(idx); });
+            edgesLayer.appendChild(hit);
+
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', p1.x); line.setAttribute('y1', p1.y);
+            line.setAttribute('x2', p2.x); line.setAttribute('y2', p2.y);
+            line.setAttribute('stroke', '#4f8cff');
+            line.setAttribute('stroke-width', '2.5');
+            line.setAttribute('marker-end', 'url(#b-arrow)');
+            line.style.pointerEvents = 'none';
+            edgesLayer.appendChild(line);
+        });
+    }
+
+    function renderNodes() {
+        nodesLayer.innerHTML = '';
+        nodes.forEach(n => {
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.setAttribute('transform', `translate(${n.x},${n.y})`);
+            g.style.cursor = mode === 'select' ? 'grab' : 'pointer';
+
+            const isConnectSource = connectFrom === n.tagName;
+            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            rect.setAttribute('width', NODE_W);
+            rect.setAttribute('height', NODE_H);
+            rect.setAttribute('rx', 8);
+            rect.setAttribute('fill', n.isTerminal ? '#12271c' : '#161a21');
+            rect.setAttribute('stroke', isConnectSource ? '#f0a93a' : (n.isTerminal ? '#2ecc71' : '#4f8cff'));
+            rect.setAttribute('stroke-width', isConnectSource ? '3' : (n.isTerminal ? '2.5' : '1.5'));
+            if (n.isTerminal) rect.setAttribute('stroke-dasharray', '4,2');
+            g.appendChild(rect);
+
+            const lines = labelLines(n.tagName);
+            const lineHeight = 13;
+            const startY = NODE_H / 2 - ((lines.length - 1) * lineHeight) / 2 + 4;
+            lines.forEach((line, li) => {
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', NODE_W / 2);
+                text.setAttribute('y', startY + li * lineHeight);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('font-family', 'SFMono-Regular,Consolas,monospace');
+                text.setAttribute('font-size', '11');
+                text.setAttribute('font-weight', '600');
+                text.setAttribute('fill', n.isTerminal ? '#2ecc71' : '#e6e9ef');
+                text.textContent = line;
+                text.style.userSelect = 'none';
+                g.appendChild(text);
+            });
+
+            g.addEventListener('pointerdown', (evt) => onNodeMouseDown(evt, n));
+            g.addEventListener('click', (evt) => { evt.stopPropagation(); onNodeClick(n); });
+            g.addEventListener('dblclick', (evt) => { evt.stopPropagation(); onNodeRename(n, evt); });
+
+            n._el = g;
+            nodesLayer.appendChild(g);
+        });
+    }
+
+    function onNodeMouseDown(evt, node) {
+        if (mode !== 'select') return;
+        evt.preventDefault();
+        evt.target.setPointerCapture(evt.pointerId);
+        const pt = svgPoint(evt);
+        dragging = { tagName: node.tagName, offsetX: pt.x - node.x, offsetY: pt.y - node.y };
+    }
+
+    svg.addEventListener('pointermove', (evt) => {
+        if (!dragging) return;
+        const node = findNode(dragging.tagName);
+        if (!node) return;
+        const pt = svgPoint(evt);
+        node.x = Math.max(0, pt.x - dragging.offsetX);
+        node.y = Math.max(0, pt.y - dragging.offsetY);
+        if (node._el) node._el.setAttribute('transform', `translate(${node.x},${node.y})`);
+        renderEdges();
+    });
+    svg.addEventListener('pointerup', () => { dragging = null; render(); });
+    svg.addEventListener('pointercancel', () => { dragging = null; render(); });
+
+    function onNodeClick(node) {
+        if (mode === 'connect') {
+            if (connectFrom === null) {
+                connectFrom = node.tagName;
+            } else if (connectFrom === node.tagName) {
+                connectFrom = null;
+            } else {
+                const exists = edges.some(e => e.from === connectFrom && e.to === node.tagName);
+                if (!exists) edges.push({ from: connectFrom, to: node.tagName });
+                connectFrom = null;
+            }
+            render();
+        } else if (mode === 'terminal') {
+            node.isTerminal = !node.isTerminal;
+            render();
+        } else if (mode === 'delete') {
+            nodes = nodes.filter(n => n.tagName !== node.tagName);
+            edges = edges.filter(e => e.from !== node.tagName && e.to !== node.tagName);
+            render();
+        }
+    }
+
+    function onEdgeClick(index) {
+        if (mode !== 'delete') return;
+        edges.splice(index, 1);
+        render();
+    }
+
+    let renamingNode = null;
+
+    function onNodeRename(node, evt) {
+        renamingNode = node;
+        const box = document.getElementById('renameBox');
+        const input = document.getElementById('renameInput');
+        input.value = node.tagName;
+
+        const boxWidth = 220, boxHeight = 90;
+        box.style.left = Math.max(0, Math.min(evt.clientX, window.innerWidth - boxWidth - 10)) + 'px';
+        box.style.top = Math.max(0, Math.min(evt.clientY, window.innerHeight - boxHeight - 10)) + 'px';
+        box.style.display = 'flex';
+        input.focus();
+        input.select();
+    }
+
+    function closeRenameBox() {
+        document.getElementById('renameBox').style.display = 'none';
+        renamingNode = null;
+    }
+
+    function commitRename() {
+        if (!renamingNode) return;
+        const input = document.getElementById('renameInput');
+        const trimmed = input.value.trim();
+        if (!trimmed || trimmed === renamingNode.tagName) { closeRenameBox(); return; }
+        if (nodes.some(n => n.tagName === trimmed)) { alert('A tag with that name already exists on this canvas.'); return; }
+        edges.forEach(e => {
+            if (e.from === renamingNode.tagName) e.from = trimmed;
+            if (e.to === renamingNode.tagName) e.to = trimmed;
+        });
+        renamingNode.tagName = trimmed;
+        closeRenameBox();
+        render();
+    }
+
+    document.getElementById('renameConfirm').addEventListener('click', commitRename);
+    document.getElementById('renameCancel').addEventListener('click', closeRenameBox);
+    document.getElementById('renameInput').addEventListener('keydown', (evt) => {
+        if (evt.key === 'Enter') { evt.preventDefault(); commitRename(); }
+        if (evt.key === 'Escape') { evt.preventDefault(); closeRenameBox(); }
+    });
+
+    // --- Add-tag picker: pick an existing library tag, or create a new one ---
+
+    function openTagPicker(clientX, clientY) {
+        const picker = document.getElementById('tagPicker');
+        const select = document.getElementById('tagPickerSelect');
+        const newInput = document.getElementById('tagPickerNewInput');
+        const usedNames = new Set(nodes.map(n => n.tagName));
+        const choices = availableTags.filter(t => !usedNames.has(t.tagName));
+
+        select.innerHTML = '';
+        if (choices.length === 0) {
+            const noneOpt = document.createElement('option');
+            noneOpt.value = ''; noneOpt.textContent = '(no unused tags left in library)';
+            select.appendChild(noneOpt);
+        }
+        choices.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.tagName; opt.textContent = t.tagName;
+            select.appendChild(opt);
+        });
+        const newOpt = document.createElement('option');
+        newOpt.value = '__new__'; newOpt.textContent = '+ Create new tag…';
+        select.appendChild(newOpt);
+
+        newInput.style.display = 'none';
+        newInput.value = '';
+
+        const pickerWidth = 220, pickerHeight = 150;
+        picker.style.left = Math.max(0, Math.min(clientX, window.innerWidth - pickerWidth - 10)) + 'px';
+        picker.style.top = Math.max(0, Math.min(clientY, window.innerHeight - pickerHeight - 10)) + 'px';
+        picker.style.display = 'flex';
+        select.focus();
+    }
+
+    // Toggle the inline "new tag name" field on/off right in the picker —
+    // no native browser prompt() involved anywhere in this flow.
+    document.getElementById('tagPickerSelect').addEventListener('change', (evt) => {
+        const newInput = document.getElementById('tagPickerNewInput');
+        if (evt.target.value === '__new__') {
+            newInput.style.display = 'block';
+            newInput.focus();
+        } else {
+            newInput.style.display = 'none';
+        }
+    });
+
+    function closeTagPicker() {
+        document.getElementById('tagPicker').style.display = 'none';
+        pendingClickPos = null;
+    }
+
+    function placeNode(tagName) {
+        if (nodes.some(n => n.tagName === tagName)) { alert('That tag is already on this canvas.'); return; }
+        const pos = pendingClickPos || { x: 100, y: 100 };
+        nodes.push({ tagName, isTerminal: false, x: Math.max(0, pos.x - 75), y: Math.max(0, pos.y - 23) });
+        render();
+    }
+
+    document.getElementById('tagPickerCancel').addEventListener('click', closeTagPicker);
+    document.getElementById('tagPickerNewInput').addEventListener('keydown', (evt) => {
+        if (evt.key === 'Enter') { evt.preventDefault(); document.getElementById('tagPickerAdd').click(); }
+        if (evt.key === 'Escape') { evt.preventDefault(); closeTagPicker(); }
+    });
+
+    document.getElementById('tagPickerAdd').addEventListener('click', async () => {
+        const select = document.getElementById('tagPickerSelect');
+        const value = select.value;
+        if (!value) { closeTagPicker(); return; }
+
+        if (value !== '__new__') {
+            placeNode(value);
+            closeTagPicker();
+            return;
+        }
+
+        const newInput = document.getElementById('tagPickerNewInput');
+        const typed = newInput.value;
+        if (!typed || typed.trim() === '') { closeTagPicker(); return; }
+        const trimmed = typed.trim();
+        closeTagPicker();
+
+        if (availableTags.some(t => t.tagName === trimmed)) {
+            placeNode(trimmed);
+            return;
+        }
+
+        try {
+            const res = await fetch('@Url.Action("QuickCreate", "Tag")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ TagName: trimmed })
+            });
+            if (!res.ok) throw new Error('Request failed (' + res.status + ')');
+            const data = await res.json();
+            availableTags.push({ id: data.id, tagName: data.tagName });
+            placeNode(data.tagName);
+        } catch (err) {
+            alert('Could not save the new tag to the library: ' + err.message);
+        }
+    });
+
+    svg.addEventListener('click', (evt) => {
+        if (mode !== 'add') return;
+        pendingClickPos = svgPoint(evt);
+        openTagPicker(evt.clientX, evt.clientY);
+    });
+
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+        const statusEl = document.getElementById('saveStatus');
+        statusEl.textContent = 'Saving…';
+        statusEl.style.color = 'var(--text-faint)';
+        try {
+            const res = await fetch('@Url.Action("SaveGraph", "FlowDefinition")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    FlowDefinitionId: flowDefinitionId,
+                    Nodes: nodes.map(n => ({ TagName: n.tagName, IsTerminal: n.isTerminal, X: n.x, Y: n.y })),
+                    Edges: edges.map(e => ({ From: e.from, To: e.to }))
+                })
+            });
+            if (!res.ok) throw new Error('Request failed (' + res.status + ')');
+            const data = await res.json();
+            statusEl.textContent = `Saved — ${data.tagCount} tag(s), ${data.transitionCount} transition(s).`;
+            statusEl.style.color = '#2ecc71';
+        } catch (err) {
+            statusEl.textContent = 'Save failed: ' + err.message;
+            statusEl.style.color = '#ef5350';
+        }
+    });
+
+    render();
+})();
+} catch (err) {
+    // Surface the failure instead of leaving a silently-dead page — this is
+    // exactly the class of bug that made the previous version look like
+    // "nothing works at all" with no visible clue why.
+    console.error('Flow builder failed to initialize:', err);
+    var box = document.getElementById('builderError');
+    if (box) {
+        box.style.display = 'block';
+        box.textContent = 'The flow builder failed to load: ' + err.message + ' (see browser console for details — this is a bug, please report it with this message).';
+    }
+}
+</script>

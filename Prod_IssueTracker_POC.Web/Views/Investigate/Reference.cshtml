@@ -68,6 +68,13 @@ else
     </div>
 </div>
 
+<a class="btn" style="display:inline-block; text-decoration:none; margin-bottom:16px;"
+   asp-action="DownloadReport" asp-controller="Investigate"
+   asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-flowName="@Model.FlowName" asp-route-attemptIndex="@Model.ActiveAttemptIndex"
+   target="_blank">
+    ⬇ Download Report (diagram + raw sequence)
+</a>
+
 <div class="section-label">Raw Tag Sequence</div>
 <div class="timeline">
     @for (int i = 0; i < active.TagSequence.Count; i++)

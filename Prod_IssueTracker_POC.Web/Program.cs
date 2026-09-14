@@ -18,6 +18,14 @@ builder.Services.AddHttpClient<DemoSeedClient>(client =>
     client.BaseAddress = new Uri(apiBaseUrl);
 });
 
+// Flow definitions (tags + allowed transitions): stored in Postgres, edited
+// via the Flow Definitions admin page, read by InvestigateController as an
+// alternative/addition to the hardcoded FlowMaps.cs entries.
+builder.Services.AddScoped<FlowDefinitionRepository>();
+
+// Renders the DownloadReport view to an HTML string for file downloads.
+builder.Services.AddScoped<RazorViewRenderer>();
+
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())

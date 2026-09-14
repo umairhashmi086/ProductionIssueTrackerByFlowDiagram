@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Prod_IssueTracker_POC.Web.FlowTagging;
 using Prod_IssueTracker_POC.Web.Models;
@@ -9,46 +10,87 @@ namespace Prod_IssueTracker_POC.Web.Controllers
     {
         private readonly LokiInvestigateClient _loki;
         private readonly DemoSeedClient _demoSeed;
+        private readonly FlowDefinitionRepository _flowDefinitions;
+        private readonly RazorViewRenderer _viewRenderer;
         private readonly FlowValidator _validator = new();
 
-        public InvestigateController(LokiInvestigateClient loki, DemoSeedClient demoSeed)
+        public InvestigateController(
+            LokiInvestigateClient loki,
+            DemoSeedClient demoSeed,
+            FlowDefinitionRepository flowDefinitions,
+            RazorViewRenderer viewRenderer)
         {
             _loki = loki;
             _demoSeed = demoSeed;
+            _flowDefinitions = flowDefinitions;
+            _viewRenderer = viewRenderer;
         }
 
         // GET /Investigate/Index — search form: flow-type dropdown + a
         // reference number OR Kong ID field (whichever is filled in wins).
         [HttpGet]
-        public IActionResult Index()
+        public async Task<IActionResult> Index()
         {
-            var model = new SearchIndexViewModel
-            {
-                FlowNames = FlowMaps.AllFlows.Keys.OrderBy(n => n).ToList()
-            };
+            var dbFlowNames = await _flowDefinitions.GetAllFlowNamesAsync();
+            var allFlowNames = FlowMaps.AllFlows.Keys.Concat(dbFlowNames).Distinct().OrderBy(n => n).ToList();
+
+            var model = new SearchIndexViewModel { FlowNames = allFlowNames };
             return View(model);
         }
 
         // GET /Investigate/Reference?referenceNumber=MG-2026-00417&flowName=...&attemptIndex=0
         // GET /Investigate/Reference?kongId=abc123&flowName=...
-        // Reads come exclusively from Loki — no dependency on any producer
-        // service's own API. flowName (from the dropdown) is optional and,
-        // when set, narrows the Loki query itself rather than just filtering
-        // client-side — useful if reference numbers or Kong IDs could ever
-        // collide across different flow types sharing one Loki instance.
         [HttpGet]
         public async Task<IActionResult> Reference(string? referenceNumber, string? kongId, string? flowName, int attemptIndex = 0)
         {
-            // The dropdown submits the literal value "All" for "no filter" —
-            // normalize it here so everything downstream can keep treating
-            // "no flow filter" as null/empty, same as before.
+            var model = await BuildReferenceViewModelAsync(referenceNumber, kongId, flowName, attemptIndex);
+            if (model == null)
+            {
+                ViewBag.NotFoundReference = string.IsNullOrWhiteSpace(kongId) ? referenceNumber : kongId;
+                return View("NotFound");
+            }
+            return View(model);
+        }
+
+        // GET /Investigate/DownloadReport?... — same lookup as Reference, but
+        // renders the diagram + raw tag sequence into one self-contained HTML
+        // file the browser downloads directly (works fully offline once
+        // downloaded — the SVG is inline, not a separate image reference).
+        [HttpGet]
+        public async Task<IActionResult> DownloadReport(string? referenceNumber, string? kongId, string? flowName, int attemptIndex = 0)
+        {
+            var model = await BuildReferenceViewModelAsync(referenceNumber, kongId, flowName, attemptIndex);
+            if (model == null) return NotFound();
+
+            var html = await _viewRenderer.RenderViewToStringAsync(ControllerContext, "DownloadReport", model);
+            var bytes = Encoding.UTF8.GetBytes(html);
+            var fileName = $"investigate-{model.ReferenceNumber}-attempt{model.ActiveAttemptIndex + 1}.html";
+            return File(bytes, "text/html", fileName);
+        }
+
+        // POST /Investigate/SeedDemo — this is the one place Web still talks
+        // to the API project, because seeding sample data is a WRITE action
+        // (it asks the producer to log something), not a read.
+        [HttpPost]
+        public async Task<IActionResult> SeedDemo()
+        {
+            var referenceNumber = await _demoSeed.SeedMoneyGramScenarioAsync();
+            return RedirectToAction(nameof(Reference), new { referenceNumber = referenceNumber ?? "MG-2026-00417" });
+        }
+
+        /// <summary>
+        /// Shared lookup + validation logic used by both Reference (renders
+        /// the page) and DownloadReport (renders the same data into a
+        /// downloadable file) — keeps them from drifting out of sync.
+        /// </summary>
+        private async Task<ReferenceViewModel?> BuildReferenceViewModelAsync(string? referenceNumber, string? kongId, string? flowName, int attemptIndex)
+        {
             if (string.Equals(flowName, "All", StringComparison.OrdinalIgnoreCase))
                 flowName = null;
 
             var searchingByKongId = string.IsNullOrWhiteSpace(referenceNumber) && !string.IsNullOrWhiteSpace(kongId);
-
             if (string.IsNullOrWhiteSpace(referenceNumber) && string.IsNullOrWhiteSpace(kongId))
-                return RedirectToAction(nameof(Index));
+                return null;
 
             Dictionary<string, List<TagDto>> attemptsByKongId;
             string resolvedReferenceNumber;
@@ -56,11 +98,7 @@ namespace Prod_IssueTracker_POC.Web.Controllers
             if (searchingByKongId)
             {
                 var (foundReference, tags) = await _loki.GetByKongIdAsync(kongId!, flowName);
-                if (tags.Count == 0 || foundReference == null)
-                {
-                    ViewBag.NotFoundReference = kongId;
-                    return View("NotFound");
-                }
+                if (tags.Count == 0 || foundReference == null) return null;
                 resolvedReferenceNumber = foundReference;
                 attemptsByKongId = new Dictionary<string, List<TagDto>> { [kongId!] = tags };
             }
@@ -68,17 +106,18 @@ namespace Prod_IssueTracker_POC.Web.Controllers
             {
                 resolvedReferenceNumber = referenceNumber!;
                 attemptsByKongId = await _loki.GetAttemptsByReferenceAsync(resolvedReferenceNumber, flowName);
-                if (attemptsByKongId.Count == 0)
-                {
-                    ViewBag.NotFoundReference = resolvedReferenceNumber;
-                    return View("NotFound");
-                }
+                if (attemptsByKongId.Count == 0) return null;
             }
 
             var resolvedFlowName = flowName ?? await _loki.GetFlowNameAsync(resolvedReferenceNumber) ?? "";
-            var (flowMap, terminalTags) = FlowMaps.AllFlows.TryGetValue(resolvedFlowName, out var flow)
-                ? flow
-                : (new Dictionary<string, string[]>(), new HashSet<string>());
+
+            // Flow definitions can come from either source: the hardcoded
+            // FlowMaps (original POC flows) or ones created via the
+            // Flow Definitions admin page and stored in Postgres. DB wins if
+            // a flow with the same name exists in both, since DB-defined
+            // flows are the ones actively being authored/edited.
+            var (flowMap, terminalTags) = await _flowDefinitions.GetFlowDefinitionAsync(resolvedFlowName)
+                ?? (FlowMaps.AllFlows.TryGetValue(resolvedFlowName, out var flow) ? flow : (new Dictionary<string, string[]>(), new HashSet<string>()));
 
             var attempts = attemptsByKongId
                 .Select(kv =>
@@ -118,7 +157,7 @@ namespace Prod_IssueTracker_POC.Web.Controllers
                 ? FlowDiagramLayout.Build(flowMap, terminalTags, active.TagSequence, active.DeadEnd, active.LastValidTag)
                 : new DiagramViewModel();
 
-            var model = new ReferenceViewModel
+            return new ReferenceViewModel
             {
                 ReferenceNumber = resolvedReferenceNumber,
                 FlowName = resolvedFlowName,
@@ -126,18 +165,6 @@ namespace Prod_IssueTracker_POC.Web.Controllers
                 ActiveAttemptIndex = attemptIndex,
                 Diagram = diagram
             };
-
-            return View(model);
-        }
-
-        // POST /Investigate/SeedDemo — this is the one place Web still talks
-        // to the API project, because seeding sample data is a WRITE action
-        // (it asks the producer to log something), not a read.
-        [HttpPost]
-        public async Task<IActionResult> SeedDemo()
-        {
-            var referenceNumber = await _demoSeed.SeedMoneyGramScenarioAsync();
-            return RedirectToAction(nameof(Reference), new { referenceNumber = referenceNumber ?? "MG-2026-00417" });
         }
     }
 }

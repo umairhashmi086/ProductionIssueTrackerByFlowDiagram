@@ -1,0 +1,37 @@
+@model List<FlowDefinitionSummary>
+@{
+    ViewData["Title"] = "Flow Definitions";
+}
+
+<div class="section-label" style="margin-top:0;">Flow Definitions (Postgres-backed)</div>
+<p class="hint" style="margin-bottom:16px;">
+    Flows created here are picked up automatically by the investigator — no code changes needed.
+    A DB-defined flow takes priority over a hardcoded FlowMaps.cs entry with the same name.
+</p>
+
+<a class="btn" style="display:inline-block; text-decoration:none; margin-bottom:20px;" asp-action="Create" asp-controller="FlowDefinition">+ New Flow</a>
+
+@if (Model.Count == 0)
+{
+    <div class="empty">No flow definitions yet — create one above.</div>
+}
+else
+{
+    <div class="attempts" style="flex-direction:column;">
+        @foreach (var f in Model)
+        {
+            <a class="attempt-tab" asp-action="Edit" asp-controller="FlowDefinition" asp-route-flowName="@f.FlowName" style="margin-bottom:8px;">
+                <div class="num">@f.FlowName</div>
+                @if (!string.IsNullOrEmpty(f.Description))
+                {
+                    <div class="time">@f.Description</div>
+                }
+                <div class="status ok">@f.TagCount tag(s), @f.TransitionCount transition(s)</div>
+            </a>
+        }
+    </div>
+}
+
+<div class="hint" style="margin-top:24px;">
+    <a asp-action="Index" asp-controller="Investigate">← Back to Investigate</a>
+</div>

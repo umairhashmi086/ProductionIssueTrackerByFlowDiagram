@@ -3,7 +3,7 @@
     ViewData["Title"] = "Investigate";
 }
 
-<form asp-action="Reference" asp-controller="Investigate" method="get" class="search-form">
+<form asp-action="Reference" asp-controller="Investigate" method="get" class="search-form" target="_blank">
     <div class="search-field">
         <label for="flowNameSelect">Flow</label>
         <select id="flowNameSelect" name="flowName">
@@ -35,7 +35,7 @@
 
 <div class="hint">
     No data yet?
-    <form asp-action="SeedDemo" asp-controller="Investigate" method="post">
+    <form asp-action="SeedDemo" asp-controller="Investigate" method="post" target="_blank">
         <button type="submit" class="linklike">Seed the MoneyGram demo scenario</button>
     </form>
     Or call the API project's <code>GetFee</code> endpoint a couple of times with the same
