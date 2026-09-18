@@ -9,12 +9,6 @@ namespace Prod_IssueTracker_POC.Web.Models
         public int TransitionCount { get; set; }
     }
 
-    public class TagRow
-    {
-        public int Id { get; set; }
-        public string TagName { get; set; } = "";
-    }
-
     public class FlowTagRow
     {
         public int Id { get; set; }
@@ -39,9 +33,6 @@ namespace Prod_IssueTracker_POC.Web.Models
         public string? Description { get; set; }
         public List<FlowTagRow> Tags { get; set; } = new();
         public List<FlowTransitionRow> Transitions { get; set; } = new();
-        // The full reusable tag library, for the "add existing tag" dropdown
-        // — separate from Tags above, which is just what's on THIS flow.
-        public List<TagRow> AvailableTags { get; set; } = new();
     }
 
     public class CreateFlowDefinitionViewModel
@@ -56,8 +47,13 @@ namespace Prod_IssueTracker_POC.Web.Models
     {
         public string TagName { get; set; } = "";
         public bool IsTerminal { get; set; }
-        public int X { get; set; }
-        public int Y { get; set; }
+        // double (not int): the canvas sends pixel coordinates that can be
+        // fractional (getBoundingClientRect() sub-pixel values). Using int
+        // here would throw a JsonException on any non-whole number and
+        // silently null out the entire SaveGraphRequest during model
+        // binding — see FlowDefinitionController.SaveGraph.
+        public double X { get; set; }
+        public double Y { get; set; }
     }
 
     public class GraphEdgeDto

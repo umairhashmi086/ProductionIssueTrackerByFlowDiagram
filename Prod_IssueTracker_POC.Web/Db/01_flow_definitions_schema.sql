@@ -13,6 +13,12 @@ CREATE TABLE flow_definitions (
 
 -- The vocabulary of tags for a flow, and which ones are terminal (a
 -- transaction that reaches one of these is considered "finished").
+--
+-- NOTE: this table was later normalized (see Db/04_link_flow_tags_to_catalog.sql)
+-- to reference the shared "tags" catalog via tag_id, so the same tag name
+-- can be reused across multiple flows without duplicating rows. The
+-- tag_name column below is superseded by tags.tag_name once that migration
+-- runs; it's kept only for backward compatibility with old rows/tooling.
 CREATE TABLE flow_tags (
     id                   SERIAL PRIMARY KEY,
     flow_definition_id   INT NOT NULL REFERENCES flow_definitions(id) ON DELETE CASCADE,

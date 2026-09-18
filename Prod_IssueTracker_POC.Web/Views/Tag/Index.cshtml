@@ -1,54 +1,54 @@
 @model List<TagRow>
 @{
-    ViewData["Title"] = "Tag Library";
+    ViewData["Title"] = "Manage Tags";
 }
 
-<div class="section-label" style="margin-top:0;">Tag Library</div>
+<div class="section-label" style="margin-top:0;">Manage Tags</div>
 <p class="hint" style="margin-bottom:16px;">
-    Add a tag once here, then reuse it across any flow in the visual builder — no need to retype the same name for every flow.
+    This is the reusable catalog of tag names. Add a tag once here and it becomes pickable
+    in every flow's "+ Add Tag" mode — no more retyping the same tag name from scratch each time.
 </p>
 
-@if (TempData["DeleteError"] != null)
-{
-    <div class="health-banner bad" style="margin-bottom:16px;">@TempData["DeleteError"]</div>
-}
-
-<form asp-action="Create" asp-controller="Tag" method="post" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:24px;">
+<form asp-action="Create" asp-controller="Tag" method="post" class="search-form" style="margin-bottom:20px;">
+    @Html.AntiForgeryToken()
     <div class="search-field">
-        <label for="newTagNameInput">New tag name</label>
-        <input id="newTagNameInput" name="tagName" placeholder="e.g. ValidationSuccess" required />
+        <label for="TagName">New tag name</label>
+        <input type="text" id="TagName" name="TagName" placeholder="e.g. PaymentInitiated" required />
     </div>
-    <button type="submit">Add Tag</button>
+    <button type="submit">+ Add Tag</button>
 </form>
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="health-banner bad" style="margin-bottom:16px;">
+        @foreach (var err in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+        {
+            <div>@err.ErrorMessage</div>
+        }
+    </div>
+}
 
 @if (Model.Count == 0)
 {
-    <div class="empty">No tags yet — add the first one above.</div>
+    <div class="empty">No tags yet — add one above.</div>
 }
 else
 {
-    <table style="width:100%; border-collapse:collapse; font-size:13px;">
-        <thead>
-            <tr style="color:var(--text-faint); font-size:11px; text-transform:uppercase;">
-                <th style="text-align:left; padding:6px 8px;">Tag name</th>
-                <th style="padding:6px 8px;"></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var t in Model)
-            {
-                <tr style="border-top:1px solid var(--border);">
-                    <td style="padding:8px; font-family:var(--mono);">@t.TagName</td>
-                    <td style="padding:8px; text-align:right;">
-                        <form asp-action="Delete" asp-controller="Tag" method="post" style="display:inline;" onsubmit="return confirm('Delete this tag? Only works if it is not used in any flow.');">
-                            <input type="hidden" name="id" value="@t.Id" />
-                            <button type="submit" class="linklike" style="color:var(--danger);">remove</button>
-                        </form>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="attempts" style="flex-direction:column;">
+        @foreach (var t in Model)
+        {
+            <div class="attempt-tab" style="display:flex; align-items:center; justify-content:space-between;">
+                <div>
+                    <div class="num">@t.TagName</div>
+                    <div class="time">Added @t.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
+                </div>
+                <form asp-action="Delete" asp-controller="Tag" asp-route-id="@t.Id" method="post"
+                      onsubmit="return confirm('Remove &quot;@t.TagName&quot; from the tag catalog? Flows that already use it are unaffected.');">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="linklike" style="color: var(--danger);">Remove</button>
+                </form>
+            </div>
+        }
+    </div>
 }
 
 <div class="hint" style="margin-top:24px;">

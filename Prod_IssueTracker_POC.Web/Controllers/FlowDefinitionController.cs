@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Npgsql;
 using Prod_IssueTracker_POC.Web.Models;
 using Prod_IssueTracker_POC.Web.Services;
 
@@ -14,10 +13,12 @@ namespace Prod_IssueTracker_POC.Web.Controllers
     public class FlowDefinitionController : Controller
     {
         private readonly FlowDefinitionRepository _repo;
+        private readonly TagRepository _tagRepo;
 
-        public FlowDefinitionController(FlowDefinitionRepository repo)
+        public FlowDefinitionController(FlowDefinitionRepository repo, TagRepository tagRepo)
         {
             _repo = repo;
+            _tagRepo = tagRepo;
         }
 
         // GET /FlowDefinition — list all DB-defined flows
@@ -43,85 +44,34 @@ namespace Prod_IssueTracker_POC.Web.Controllers
                 return View(model);
             }
 
-            var trimmedName = model.FlowName.Trim();
-
-            var existing = await _repo.GetDetailAsync(trimmedName);
-            if (existing != null)
-            {
-                ModelState.AddModelError(nameof(model.FlowName), $"A flow named \"{trimmedName}\" already exists — pick a different name or edit the existing one.");
-                return View(model);
-            }
-
-            try
-            {
-                await _repo.CreateFlowAsync(trimmedName, model.Description?.Trim());
-            }
-            catch (PostgresException ex) when (ex.SqlState == "23505") // unique_violation
-            {
-                ModelState.AddModelError(nameof(model.FlowName), $"A flow named \"{trimmedName}\" already exists — pick a different name or edit the existing one.");
-                return View(model);
-            }
-
-            return RedirectToAction(nameof(Edit), new { flowName = trimmedName });
+            await _repo.CreateFlowAsync(model.FlowName.Trim(), model.Description?.Trim());
+            return RedirectToAction(nameof(Edit), new { flowName = model.FlowName.Trim() });
         }
 
-        // GET /FlowDefinition/Edit?flowName=X — plain list-based editor:
-        // pick existing tags from the reusable library, define transitions
-        // between the ones on this flow. Simple server-rendered forms only.
+        // GET /FlowDefinition/Edit?flowName=X — the visual flow builder.
+        // Existing tags/transitions are passed to the page as JSON to seed
+        // the canvas; everything else happens client-side until Save.
         [HttpGet]
         public async Task<IActionResult> Edit(string flowName)
         {
             var detail = await _repo.GetDetailAsync(flowName);
             if (detail == null) return NotFound();
-            detail.AvailableTags = await _repo.GetAllGlobalTagsAsync();
+            ViewBag.AvailableTags = await _tagRepo.GetAllNamesAsync();
             return View(detail);
         }
 
-        // POST /FlowDefinition/AddExistingTag — pick a tag from the library
-        // and place it on this flow.
+        // POST /FlowDefinition/SaveGraph — the builder's Save button posts
+        // the WHOLE graph (all nodes + all edges) here in one call, rather
+        // than one request per tag/transition like the old form-based UI.
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddExistingTag(int flowDefinitionId, string flowName, int tagId, bool isTerminal)
+        public async Task<IActionResult> SaveGraph([FromBody] SaveGraphRequest? request)
         {
-            if (tagId > 0)
-                await _repo.AddExistingTagToFlowAsync(flowDefinitionId, tagId, isTerminal);
-            return RedirectToAction(nameof(Edit), new { flowName });
-        }
+            // Without [ApiController], model binding doesn't auto-reject a
+            // missing/malformed JSON body — it just leaves request null, so
+            // this null check must come before touching any of its members.
+            if (request == null)
+                return BadRequest(new { message = "Missing or invalid request body" });
 
-        // POST /FlowDefinition/RemoveTag — removes the tag from THIS flow
-        // only; the global tag stays in the library for reuse elsewhere.
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RemoveTag(int flowTagId, string flowName)
-        {
-            await _repo.RemoveTagFromFlowAsync(flowTagId);
-            return RedirectToAction(nameof(Edit), new { flowName });
-        }
-
-        // POST /FlowDefinition/AddTransition
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddTransition(int flowDefinitionId, string flowName, int fromFlowTagId, int toFlowTagId)
-        {
-            if (fromFlowTagId != toFlowTagId) // self-loops are meaningless — retries are handled automatically by FlowValidator
-                await _repo.AddTransitionAsync(flowDefinitionId, fromFlowTagId, toFlowTagId);
-            return RedirectToAction(nameof(Edit), new { flowName });
-        }
-
-        // POST /FlowDefinition/RemoveTransition
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RemoveTransition(int transitionId, string flowName)
-        {
-            await _repo.RemoveTransitionAsync(transitionId);
-            return RedirectToAction(nameof(Edit), new { flowName });
-        }
-
-        // POST /FlowDefinition/SaveGraph — the canvas builder's Save button
-        // posts the WHOLE graph (all nodes + all edges) here in one call.
-        [HttpPost]
-        public async Task<IActionResult> SaveGraph([FromBody] SaveGraphRequest request)
-        {
             if (request.FlowDefinitionId <= 0)
                 return BadRequest(new { message = "Missing flowDefinitionId" });
 

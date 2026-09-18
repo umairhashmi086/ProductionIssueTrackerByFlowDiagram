@@ -5,10 +5,8 @@ namespace Prod_IssueTracker_POC.Web.Services
 {
     /// <summary>
     /// CRUD against the flow_definitions / flow_tags / flow_tag_transitions
-    /// tables (see Db/*.sql), plus the reusable "tags" table. Each add/remove
-    /// action is a simple, separate form submission — deliberately plain
-    /// server-rendered CRUD rather than a client-side canvas, so it behaves
-    /// predictably without relying on hand-written browser interaction code.
+    /// tables (see Db/*.sql). The visual flow builder saves everything in
+    /// one shot via SaveGraphAsync rather than one row at a time.
     /// </summary>
     public class FlowDefinitionRepository
     {
@@ -65,47 +63,6 @@ namespace Prod_IssueTracker_POC.Web.Services
             return results;
         }
 
-        public async Task<List<TagRow>> GetAllGlobalTagsAsync()
-        {
-            const string sql = "SELECT id, tag_name FROM tags ORDER BY tag_name;";
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            await using var reader = await cmd.ExecuteReaderAsync();
-
-            var tags = new List<TagRow>();
-            while (await reader.ReadAsync())
-                tags.Add(new TagRow { Id = reader.GetInt32(0), TagName = reader.GetString(1) });
-            return tags;
-        }
-
-        /// <summary>Creates a new reusable tag, or returns the existing one's id if the name is already taken.</summary>
-        public async Task<TagRow> CreateGlobalTagAsync(string tagName)
-        {
-            const string sql = @"
-                INSERT INTO tags (tag_name) VALUES (@tagName)
-                ON CONFLICT (tag_name) DO UPDATE SET tag_name = EXCLUDED.tag_name
-                RETURNING id, tag_name;";
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("tagName", tagName);
-            await using var reader = await cmd.ExecuteReaderAsync();
-            await reader.ReadAsync();
-            return new TagRow { Id = reader.GetInt32(0), TagName = reader.GetString(1) };
-        }
-
-        /// <summary>Deletes a global tag. Throws PostgresException (foreign key violation) if it's still used by any flow — caller should catch and show a friendly message.</summary>
-        public async Task DeleteGlobalTagAsync(int tagId)
-        {
-            const string sql = "DELETE FROM tags WHERE id = @id;";
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("id", tagId);
-            await cmd.ExecuteNonQueryAsync();
-        }
-
         public async Task<int> CreateFlowAsync(string flowName, string? description)
         {
             const string sql = "INSERT INTO flow_definitions (flow_name, description) VALUES (@flowName, @description) RETURNING id;";
@@ -138,6 +95,9 @@ namespace Prod_IssueTracker_POC.Web.Services
                 model.Description = reader.IsDBNull(2) ? null : reader.GetString(2);
             }
 
+            // tag_name now lives in the normalized "tags" catalog table
+            // (flow_tags.tag_id -> tags.id); flow_tags.tag_name is legacy
+            // and no longer the source of truth, so join to get the name.
             const string tagsSql = @"
                 SELECT ft.id, t.tag_name, ft.is_terminal, ft.pos_x, ft.pos_y
                 FROM flow_tags ft
@@ -188,68 +148,16 @@ namespace Prod_IssueTracker_POC.Web.Services
             return model;
         }
 
-        /// <summary>Places an existing global tag onto this flow's tag list (or updates its terminal flag if already there).</summary>
-        public async Task AddExistingTagToFlowAsync(int flowDefinitionId, int globalTagId, bool isTerminal)
-        {
-            const string sql = @"
-                INSERT INTO flow_tags (flow_definition_id, tag_id, is_terminal, pos_x, pos_y)
-                VALUES (@flowId, @tagId, @isTerminal, 40, 40)
-                ON CONFLICT (flow_definition_id, tag_id)
-                DO UPDATE SET is_terminal = EXCLUDED.is_terminal;";
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
-            cmd.Parameters.AddWithValue("tagId", globalTagId);
-            cmd.Parameters.AddWithValue("isTerminal", isTerminal);
-            await cmd.ExecuteNonQueryAsync();
-        }
-
-        /// <summary>Removes a tag from this flow's list (cascades to any transitions using it). Does NOT delete the global tag — it stays available for other flows.</summary>
-        public async Task RemoveTagFromFlowAsync(int flowTagId)
-        {
-            const string sql = "DELETE FROM flow_tags WHERE id = @id;";
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("id", flowTagId);
-            await cmd.ExecuteNonQueryAsync();
-        }
-
-        /// <summary>Defines that one tag-on-this-flow can transition to another tag-on-this-flow.</summary>
-        public async Task AddTransitionAsync(int flowDefinitionId, int fromFlowTagId, int toFlowTagId)
-        {
-            const string sql = @"
-                INSERT INTO flow_tag_transitions (flow_definition_id, from_tag_id, to_tag_id)
-                VALUES (@flowId, @fromId, @toId)
-                ON CONFLICT (from_tag_id, to_tag_id) DO NOTHING;";
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
-            cmd.Parameters.AddWithValue("fromId", fromFlowTagId);
-            cmd.Parameters.AddWithValue("toId", toFlowTagId);
-            await cmd.ExecuteNonQueryAsync();
-        }
-
-        public async Task RemoveTransitionAsync(int transitionId)
-        {
-            const string sql = "DELETE FROM flow_tag_transitions WHERE id = @id;";
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("id", transitionId);
-            await cmd.ExecuteNonQueryAsync();
-        }
-
         /// <summary>
         /// Replaces a flow's entire tag set and transition set in one
         /// transaction — this is what the visual builder's Save button
-        /// calls. Global tags are upserted by name (reused if they already
-        /// exist in the library), then placed onto this flow with the
-        /// submitted position/terminal flag; any flow-tag NOT in the
-        /// submitted set is removed from this flow (cascades to its
-        /// transitions) — the global tag itself is never deleted here.
+        /// calls. Each node's tag name is first resolved/created in the
+        /// shared "tags" catalog (flow_tags.tag_id -> tags.id), then
+        /// upserted into flow_tags keyed on (flow_definition_id, tag_id) so
+        /// existing rows keep their id/history; any tag NOT in the
+        /// submitted set is deleted (cascades to its transitions); the
+        /// transition set is fully replaced since it has no identity of its
+        /// own beyond which two tags it connects.
         /// </summary>
         public async Task SaveGraphAsync(int flowDefinitionId, List<GraphNodeDto> nodes, List<GraphEdgeDto> edges)
         {
@@ -257,39 +165,46 @@ namespace Prod_IssueTracker_POC.Web.Services
             await conn.OpenAsync();
             await using var tx = await conn.BeginTransactionAsync();
 
+            // flow_tags.id (not tags.id) is what flow_tag_transitions links
+            // to, so this map is keyed by tag name -> flow_tags.id.
             var flowTagIdByName = new Dictionary<string, int>();
 
-            const string upsertGlobalTagSql = @"
+            const string getOrCreateCatalogTagSql = @"
                 INSERT INTO tags (tag_name) VALUES (@tagName)
                 ON CONFLICT (tag_name) DO UPDATE SET tag_name = EXCLUDED.tag_name
                 RETURNING id;";
 
             const string upsertFlowTagSql = @"
-                INSERT INTO flow_tags (flow_definition_id, tag_id, is_terminal, pos_x, pos_y)
-                VALUES (@flowId, @tagId, @isTerminal, @x, @y)
+                INSERT INTO flow_tags (flow_definition_id, tag_id, tag_name, is_terminal, pos_x, pos_y)
+                VALUES (@flowId, @tagId, @tagName, @isTerminal, @x, @y)
                 ON CONFLICT (flow_definition_id, tag_id)
-                DO UPDATE SET is_terminal = EXCLUDED.is_terminal, pos_x = EXCLUDED.pos_x, pos_y = EXCLUDED.pos_y
+                DO UPDATE SET is_terminal = EXCLUDED.is_terminal, pos_x = EXCLUDED.pos_x, pos_y = EXCLUDED.pos_y, tag_name = EXCLUDED.tag_name
                 RETURNING id;";
 
             foreach (var node in nodes)
             {
-                int globalTagId;
-                await using (var cmd = new NpgsqlCommand(upsertGlobalTagSql, conn, tx))
+                int catalogTagId;
+                await using (var cmd = new NpgsqlCommand(getOrCreateCatalogTagSql, conn, tx))
                 {
                     cmd.Parameters.AddWithValue("tagName", node.TagName);
-                    globalTagId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+                    catalogTagId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                 }
 
-                await using var flowTagCmd = new NpgsqlCommand(upsertFlowTagSql, conn, tx);
-                flowTagCmd.Parameters.AddWithValue("flowId", flowDefinitionId);
-                flowTagCmd.Parameters.AddWithValue("tagId", globalTagId);
-                flowTagCmd.Parameters.AddWithValue("isTerminal", node.IsTerminal);
-                flowTagCmd.Parameters.AddWithValue("x", node.X);
-                flowTagCmd.Parameters.AddWithValue("y", node.Y);
-                var flowTagId = await flowTagCmd.ExecuteScalarAsync();
-                flowTagIdByName[node.TagName] = Convert.ToInt32(flowTagId);
+                await using (var cmd = new NpgsqlCommand(upsertFlowTagSql, conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
+                    cmd.Parameters.AddWithValue("tagId", catalogTagId);
+                    cmd.Parameters.AddWithValue("tagName", node.TagName);
+                    cmd.Parameters.AddWithValue("isTerminal", node.IsTerminal);
+                    cmd.Parameters.AddWithValue("x", (int)Math.Round(node.X));
+                    cmd.Parameters.AddWithValue("y", (int)Math.Round(node.Y));
+                    var id = await cmd.ExecuteScalarAsync();
+                    flowTagIdByName[node.TagName] = Convert.ToInt32(id);
+                }
             }
 
+            // Remove tags that were deleted in the builder (not present in
+            // this save) — cascades to any transitions referencing them.
             const string deleteRemovedTagsSql = @"
                 DELETE FROM flow_tags
                 WHERE flow_definition_id = @flowId
@@ -316,7 +231,7 @@ namespace Prod_IssueTracker_POC.Web.Services
             {
                 if (!flowTagIdByName.TryGetValue(edge.From, out var fromId)) continue;
                 if (!flowTagIdByName.TryGetValue(edge.To, out var toId)) continue;
-                if (fromId == toId) continue;
+                if (fromId == toId) continue; // self-loops are meaningless — retries are handled automatically by FlowValidator
 
                 await using var cmd = new NpgsqlCommand(insertTransitionSql, conn, tx);
                 cmd.Parameters.AddWithValue("flowId", flowDefinitionId);

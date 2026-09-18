@@ -23,6 +23,11 @@ builder.Services.AddHttpClient<DemoSeedClient>(client =>
 // alternative/addition to the hardcoded FlowMaps.cs entries.
 builder.Services.AddScoped<FlowDefinitionRepository>();
 
+// Reusable tag catalog (see Db/03_add_tags_catalog.sql), managed via the
+// "Manage Tags" admin page and consumed by the flow builder's "+ Add Tag"
+// picker so tag names can be reused instead of retyped every time.
+builder.Services.AddScoped<TagRepository>();
+
 // Renders the DownloadReport view to an HTML string for file downloads.
 builder.Services.AddScoped<RazorViewRenderer>();
 

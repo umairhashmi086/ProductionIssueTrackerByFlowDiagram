@@ -31,10 +31,6 @@ a { color: var(--accent); }
 .save-status { font-size: 12px; }
 .builder-canvas-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: auto; max-height: 70vh; margin-bottom: 16px; }
 #builderSvg { display: block; }
-.tag-picker { position: fixed; z-index: 50; background: var(--panel-2); border: 1px solid var(--accent); border-radius: 8px; padding: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); display: flex; flex-direction: column; gap: 8px; min-width: 200px; }
-.tag-picker select { background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 8px; border-radius: 6px; font-family: var(--mono); font-size: 13px; }
-.tag-picker-buttons { display: flex; gap: 8px; }
-.tag-picker-buttons button { flex: 1; }
 .hint { color: var(--text-faint); font-size: 12px; margin-bottom: 24px; }
 .hint code { background: var(--panel-2); padding: 1px 5px; border-radius: 3px; }
 .hint form { display: inline; }
