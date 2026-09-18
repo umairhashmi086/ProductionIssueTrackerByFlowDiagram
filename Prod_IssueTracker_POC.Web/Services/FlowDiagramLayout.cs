@@ -40,6 +40,9 @@ namespace Prod_IssueTracker_POC.Web.Services
             var level = new Dictionary<string, int>();
             foreach (var r in roots) level[r] = 0;
 
+            // Longest-path relaxation: each node's row is one below the
+            // deepest predecessor that reaches it, so the diagram reads
+            // top-to-bottom in dependency order.
             var queue = new Queue<string>(roots);
             int iterations = 0;
             int maxIterations = knownNodes.Count * knownNodes.Count + 10;
@@ -134,6 +137,16 @@ namespace Prod_IssueTracker_POC.Web.Services
             var width = maxRowWidth * ColWidth + LeftPad;
             var height = (maxLevel + 1) * RowHeight + TopPad + 45;
 
+            // A "skip" edge (one that jumps past one or more intervening
+            // rows, e.g. an early node linking far down to a node that a
+            // longer alternate path also reaches) is drawn as a sideways
+            // bow in RenderSvg rather than a straight vertical line, so it
+            // visibly routes AROUND any unrelated node sitting in the same
+            // column in between instead of appearing to cut straight
+          // through/merge with it. Reserve extra width for that bow here.
+            var hasSkipEdge = edges.Any(e => !e.SameRow && Math.Abs(e.Y2 - e.Y1) > RowHeight * 1.5);
+            if (hasSkipEdge) width += NodeW / 2 + 50;
+
             var svg = RenderSvg(nodes, edges, deviationsAfterNode, width, height);
 
             return new DiagramViewModel
@@ -168,8 +181,24 @@ namespace Prod_IssueTracker_POC.Web.Services
                 }
                 else
                 {
-                    var midY = e.Y1 + (e.Y2 - e.Y1) / 2;
-                    sb.Append($"<path d=\"M {Fmt(e.X1)} {Fmt(e.Y1)} C {Fmt(e.X1)} {Fmt(midY)}, {Fmt(e.X2)} {Fmt(midY)}, {Fmt(e.X2)} {Fmt(e.Y2)}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"2\" marker-end=\"{marker}\" />");
+                    var rowSpan = Math.Abs(e.Y2 - e.Y1);
+                    var isSkip = rowSpan > RowHeight * 1.5 && Math.Abs(e.X1 - e.X2) < 0.1;
+                    if (isSkip)
+                    {
+                        // Bows the line out to the side instead of drawing
+                        // it straight down the column, so it visibly routes
+                        // AROUND any unrelated node sitting in between
+                        // (e.g. an alternate/failure branch off the same
+                        // source) rather than appearing to run straight
+                        // through — and hence "merge with" — that node.
+                        var bow = NodeW / 2 + 45;
+                        sb.Append($"<path d=\"M {Fmt(e.X1)} {Fmt(e.Y1)} C {Fmt(e.X1 + bow)} {Fmt(e.Y1 + 20)}, {Fmt(e.X2 + bow)} {Fmt(e.Y2 - 20)}, {Fmt(e.X2)} {Fmt(e.Y2)}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"2\" marker-end=\"{marker}\" />");
+                    }
+                    else
+                    {
+                        var midY = e.Y1 + (e.Y2 - e.Y1) / 2;
+                        sb.Append($"<path d=\"M {Fmt(e.X1)} {Fmt(e.Y1)} C {Fmt(e.X1)} {Fmt(midY)}, {Fmt(e.X2)} {Fmt(midY)}, {Fmt(e.X2)} {Fmt(e.Y2)}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"2\" marker-end=\"{marker}\" />");
+                    }
                 }
             }
 
@@ -181,15 +210,28 @@ namespace Prod_IssueTracker_POC.Web.Services
                 var textColor = isBad ? "#ef5350" : (n.IsReached ? "#2ecc71" : "#5c6577");
                 var dashAttr = isBad ? " stroke-dasharray=\"4,2\"" : "";
 
-                sb.Append($"<rect x=\"{Fmt(n.X)}\" y=\"{Fmt(n.Y)}\" width=\"150\" height=\"46\" rx=\"8\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{(isBad ? "2.5" : "1.5")}\"{dashAttr} />");
+                // Nodes never reached in this attempt (dim/grey, e.g. an
+                // alternate branch that wasn't taken) are drawn smaller and
+                // centered within their column — a smaller, clearly
+                // secondary box reads better next to the bowed-around line
+                // above than a full-size box the same size as the actual
+                // path's nodes.
+                var isDimUnreached = !n.IsReached && !isBad;
+                var boxW = isDimUnreached ? NodeW * 0.7 : NodeW;
+                var boxH = isDimUnreached ? NodeH * 0.72 : NodeH;
+                var boxX = n.X + (NodeW - boxW) / 2;
+                var boxY = n.Y + (NodeH - boxH) / 2;
+                var fontSize = isDimUnreached ? 9 : 10;
+
+                sb.Append($"<rect x=\"{Fmt(boxX)}\" y=\"{Fmt(boxY)}\" width=\"{Fmt(boxW)}\" height=\"{Fmt(boxH)}\" rx=\"8\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{(isBad ? "2.5" : "1.5")}\"{dashAttr} />");
 
                 var labelLines = System.Text.RegularExpressions.Regex.Replace(n.Id, "([a-z])([A-Z])", "$1\n$2").Split('\n');
-                const double lineHeight = 13;
+                var lineHeight = fontSize + 3;
                 var startY = n.Y + 23 - ((labelLines.Length - 1) * lineHeight) / 2.0 + 4;
                 for (int li = 0; li < labelLines.Length; li++)
                 {
                     var lineY = startY + li * lineHeight;
-                    sb.Append($"<text x=\"{Fmt(n.X + 75)}\" y=\"{Fmt(lineY)}\" text-anchor=\"middle\" font-family=\"SFMono-Regular,Consolas,monospace\" font-size=\"10\" font-weight=\"600\" fill=\"{textColor}\">{System.Net.WebUtility.HtmlEncode(labelLines[li])}</text>");
+                    sb.Append($"<text x=\"{Fmt(n.X + 75)}\" y=\"{Fmt(lineY)}\" text-anchor=\"middle\" font-family=\"SFMono-Regular,Consolas,monospace\" font-size=\"{fontSize}\" font-weight=\"600\" fill=\"{textColor}\">{System.Net.WebUtility.HtmlEncode(labelLines[li])}</text>");
                 }
 
                 var belowY = n.Y + NodeH + 14;

@@ -192,7 +192,9 @@ namespace Prod_IssueTracker_POC.Services
             response.Fee = fee;
 
             _logger.LogInformation("[{ReferenceNumber}] Fee Calculation Process completed successfully. Total Fee: {TotalFee}", referenceNumber, fee.TotalFee);
-            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "ProcessCompleted");
+            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "Failed");
+            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "Failed1");
+            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "Failed2");
             return response;
         }
     }

@@ -4,8 +4,11 @@
     var initialJson = System.Text.Json.JsonSerializer.Serialize(new
     {
         flowDefinitionId = Model.Id,
-        nodes = Model.Tags.Select(t => new { tagName = t.TagName, isTerminal = t.IsTerminal, x = t.PosX, y = t.PosY }),
-        edges = Model.Transitions.Select(t => new { from = t.FromTagName, to = t.ToTagName }),
+        // clientId = the row's real flow_tags.id (as a string) — the
+        // node's identity on the canvas, independent of its tag name, so
+        // the same tag can be placed as more than one node.
+        nodes = Model.Tags.Select(t => new { clientId = t.Id.ToString(), tagName = t.TagName, isTerminal = t.IsTerminal, x = t.PosX, y = t.PosY }),
+        edges = Model.Transitions.Select(t => new { from = t.FromTagId.ToString(), to = t.ToTagId.ToString() }),
         availableTags = ViewBag.AvailableTags as List<string> ?? new List<string>()
     });
 }
@@ -84,7 +87,8 @@
     const NODE_W = 150, NODE_H = 46;
     let mode = 'select';
     let connectFrom = null;
-    let dragging = null; // { tagName, offsetX, offsetY }
+    let dragging = null; // { clientId, offsetX, offsetY }
+    let nextNewId = 1; // counter for client-generated ids on brand-new nodes
 
     const svg = document.getElementById('builderSvg');
     const nodesLayer = document.getElementById('nodesLayer');
@@ -120,7 +124,7 @@
         return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
     }
 
-    function findNode(tagName) { return nodes.find(n => n.tagName === tagName); }
+    function findNode(clientId) { return nodes.find(n => n.clientId === clientId); }
 
     function labelLines(id) {
         return id.replace(/([a-z])([A-Z])/g, '$1\n$2').split('\n');
@@ -161,7 +165,7 @@
             g.setAttribute('transform', `translate(${n.x},${n.y})`);
             g.style.cursor = mode === 'select' ? 'grab' : 'pointer';
 
-            const isConnectSource = connectFrom === n.tagName;
+            const isConnectSource = connectFrom === n.clientId;
             const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
             rect.setAttribute('width', NODE_W);
             rect.setAttribute('height', NODE_H);
@@ -200,12 +204,12 @@
     function onNodeMouseDown(evt, node) {
         if (mode !== 'select') return;
         const pt = svgPoint(evt);
-        dragging = { tagName: node.tagName, offsetX: pt.x - node.x, offsetY: pt.y - node.y };
+        dragging = { clientId: node.clientId, offsetX: pt.x - node.x, offsetY: pt.y - node.y };
     }
 
     svg.addEventListener('mousemove', (evt) => {
         if (!dragging) return;
-        const node = findNode(dragging.tagName);
+        const node = findNode(dragging.clientId);
         if (!node) return;
         const pt = svgPoint(evt);
         // Round to whole pixels — coordinates from getBoundingClientRect()
@@ -221,12 +225,12 @@
     function onNodeClick(node) {
         if (mode === 'connect') {
             if (connectFrom === null) {
-                connectFrom = node.tagName;
-            } else if (connectFrom === node.tagName) {
+                connectFrom = node.clientId;
+            } else if (connectFrom === node.clientId) {
                 connectFrom = null; // cancel
             } else {
-                const exists = edges.some(e => e.from === connectFrom && e.to === node.tagName);
-                if (!exists) edges.push({ from: connectFrom, to: node.tagName });
+                const exists = edges.some(e => e.from === connectFrom && e.to === node.clientId);
+                if (!exists) edges.push({ from: connectFrom, to: node.clientId });
                 connectFrom = null;
             }
             render();
@@ -234,8 +238,8 @@
             node.isTerminal = !node.isTerminal;
             render();
         } else if (mode === 'delete') {
-            nodes = nodes.filter(n => n.tagName !== node.tagName);
-            edges = edges.filter(e => e.from !== node.tagName && e.to !== node.tagName);
+            nodes = nodes.filter(n => n.clientId !== node.clientId);
+            edges = edges.filter(e => e.from !== node.clientId && e.to !== node.clientId);
             render();
         }
     }
@@ -249,13 +253,10 @@
     function onNodeRename(node) {
         const newName = prompt('Rename tag', node.tagName);
         if (!newName || newName.trim() === '' || newName === node.tagName) return;
-        const trimmed = newName.trim();
-        if (nodes.some(n => n.tagName === trimmed)) { alert('A tag with that name already exists.'); return; }
-        edges.forEach(e => {
-            if (e.from === node.tagName) e.from = trimmed;
-            if (e.to === node.tagName) e.to = trimmed;
-        });
-        node.tagName = trimmed;
+        // Renaming to a name already used by another node on this canvas is
+        // fine now — a tag can have more than one node — so there's no
+        // duplicate-name check here anymore.
+        node.tagName = newName.trim();
         render();
     }
 
@@ -281,13 +282,14 @@
         tagPickerError.style.display = 'none';
         tagPickerNew.value = '';
         tagPickerSelect.innerHTML = '<option value="">— Select a tag —</option>';
-        availableTags
-            .filter(t => !nodes.some(n => n.tagName === t))
-            .forEach(t => {
-                const opt = document.createElement('option');
-                opt.value = t; opt.textContent = t;
-                tagPickerSelect.appendChild(opt);
-            });
+        // All catalog tags are offered every time, including ones already
+        // placed on the canvas — the same tag can now be added as more
+        // than one node.
+        availableTags.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t; opt.textContent = t;
+            tagPickerSelect.appendChild(opt);
+        });
         tagPickerOverlay.style.display = 'flex';
         tagPickerSelect.focus();
     }
@@ -303,7 +305,8 @@
     tagPickerNew.addEventListener('input', () => { if (tagPickerNew.value) tagPickerSelect.value = ''; });
 
     function addNodeAt(tagName, pt) {
-        nodes.push({ tagName, isTerminal: false, x: Math.round(Math.max(0, pt.x - 75)), y: Math.round(Math.max(0, pt.y - 23)) });
+        const clientId = 'new-' + (nextNewId++);
+        nodes.push({ clientId, tagName, isTerminal: false, x: Math.round(Math.max(0, pt.x - 75)), y: Math.round(Math.max(0, pt.y - 23)) });
         render();
     }
 
@@ -312,7 +315,6 @@
         const typed = tagPickerNew.value.trim();
         const tagName = picked || typed;
         if (!tagName) { tagPickerError.textContent = 'Pick an existing tag or type a new one.'; tagPickerError.style.display = 'block'; return; }
-        if (nodes.some(n => n.tagName === tagName)) { tagPickerError.textContent = 'A tag with that name already exists on this canvas.'; tagPickerError.style.display = 'block'; return; }
 
         if (typed && !picked) {
             // Brand-new tag name: save it to the catalog so it's reusable
@@ -348,12 +350,26 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     FlowDefinitionId: flowDefinitionId,
-                    Nodes: nodes.map(n => ({ TagName: n.tagName, IsTerminal: n.isTerminal, X: Math.round(n.x), Y: Math.round(n.y) })),
+                    Nodes: nodes.map(n => ({ ClientId: n.clientId, TagName: n.tagName, IsTerminal: n.isTerminal, X: Math.round(n.x), Y: Math.round(n.y) })),
                     Edges: edges.map(e => ({ From: e.from, To: e.to }))
                 })
             });
             if (!res.ok) throw new Error('Request failed (' + res.status + ')');
             const data = await res.json();
+
+            // Reconcile client-generated placeholder ids (e.g. "new-3")
+            // with the real ids the server just persisted them as, so a
+            // second Save (without reloading the page) updates those same
+            // rows instead of inserting duplicates.
+            const idMap = data.nodeIdMap || {};
+            edges.forEach(e => {
+                if (idMap[e.from] !== undefined) e.from = String(idMap[e.from]);
+                if (idMap[e.to] !== undefined) e.to = String(idMap[e.to]);
+            });
+            nodes.forEach(n => {
+                if (idMap[n.clientId] !== undefined) n.clientId = String(idMap[n.clientId]);
+            });
+
             statusEl.textContent = `Saved — ${data.tagCount} tag(s), ${data.transitionCount} transition(s).`;
             statusEl.style.color = '#2ecc71';
         } catch (err) {

@@ -122,7 +122,7 @@ namespace Prod_IssueTracker_POC.Web.Services
             }
 
             const string transitionsSql = @"
-                SELECT tr.id, t_from.tag_name, t_to.tag_name
+                SELECT tr.id, tr.from_tag_id, tr.to_tag_id, t_from.tag_name, t_to.tag_name
                 FROM flow_tag_transitions tr
                 JOIN flow_tags ft_from ON ft_from.id = tr.from_tag_id
                 JOIN tags t_from ON t_from.id = ft_from.tag_id
@@ -139,8 +139,10 @@ namespace Prod_IssueTracker_POC.Web.Services
                     model.Transitions.Add(new FlowTransitionRow
                     {
                         Id = reader.GetInt32(0),
-                        FromTagName = reader.GetString(1),
-                        ToTagName = reader.GetString(2)
+                        FromTagId = reader.GetInt32(1),
+                        ToTagId = reader.GetInt32(2),
+                        FromTagName = reader.GetString(3),
+                        ToTagName = reader.GetString(4)
                     });
                 }
             }
@@ -152,33 +154,50 @@ namespace Prod_IssueTracker_POC.Web.Services
         /// Replaces a flow's entire tag set and transition set in one
         /// transaction — this is what the visual builder's Save button
         /// calls. Each node's tag name is first resolved/created in the
-        /// shared "tags" catalog (flow_tags.tag_id -> tags.id), then
-        /// upserted into flow_tags keyed on (flow_definition_id, tag_id) so
-        /// existing rows keep their id/history; any tag NOT in the
-        /// submitted set is deleted (cascades to its transitions); the
-        /// transition set is fully replaced since it has no identity of its
-        /// own beyond which two tags it connects.
+        /// shared "tags" catalog (flow_tags.tag_id -> tags.id). Nodes are
+        /// matched to existing flow_tags rows by GraphNodeDto.ClientId
+        /// (which holds the row's real flow_tags.id once loaded from the
+        /// DB) rather than by tag — the same tag can now have more than one
+        /// node/row in the same flow, so tag identity alone can no longer
+        /// tell rows apart. Any existing row NOT present in the submitted
+        /// set is deleted (cascades to its transitions); the transition set
+        /// is fully replaced since it has no identity of its own beyond
+        /// which two node instances it connects.
         /// </summary>
-        public async Task SaveGraphAsync(int flowDefinitionId, List<GraphNodeDto> nodes, List<GraphEdgeDto> edges)
+        /// <returns>
+        /// Map of each submitted node's ClientId to its real, persisted
+        /// flow_tags.id, so the caller (the builder's Save button) can
+        /// reconcile its client-generated placeholder ids (e.g. "new-3")
+        /// with real ids and avoid re-inserting the same node on a
+        /// subsequent save without a page reload.
+        /// </returns>
+        public async Task<Dictionary<string, int>> SaveGraphAsync(int flowDefinitionId, List<GraphNodeDto> nodes, List<GraphEdgeDto> edges)
         {
             await using var conn = new NpgsqlConnection(_connectionString);
             await conn.OpenAsync();
             await using var tx = await conn.BeginTransactionAsync();
 
-            // flow_tags.id (not tags.id) is what flow_tag_transitions links
-            // to, so this map is keyed by tag name -> flow_tags.id.
-            var flowTagIdByName = new Dictionary<string, int>();
+            // Maps the builder's per-node ClientId (a flow_tags.id as a
+            // string for existing nodes, or a client-made placeholder like
+            // "new-3" for nodes just added in the browser) to the row's
+            // real flow_tags.id, so edges (which reference ClientId) can be
+            // resolved to real ids after inserts/updates below.
+            var flowTagIdByClientId = new Dictionary<string, int>();
 
             const string getOrCreateCatalogTagSql = @"
                 INSERT INTO tags (tag_name) VALUES (@tagName)
                 ON CONFLICT (tag_name) DO UPDATE SET tag_name = EXCLUDED.tag_name
                 RETURNING id;";
 
-            const string upsertFlowTagSql = @"
+            const string updateExistingFlowTagSql = @"
+                UPDATE flow_tags
+                SET tag_id = @tagId, tag_name = @tagName, is_terminal = @isTerminal, pos_x = @x, pos_y = @y
+                WHERE id = @id AND flow_definition_id = @flowId
+                RETURNING id;";
+
+            const string insertFlowTagSql = @"
                 INSERT INTO flow_tags (flow_definition_id, tag_id, tag_name, is_terminal, pos_x, pos_y)
                 VALUES (@flowId, @tagId, @tagName, @isTerminal, @x, @y)
-                ON CONFLICT (flow_definition_id, tag_id)
-                DO UPDATE SET is_terminal = EXCLUDED.is_terminal, pos_x = EXCLUDED.pos_x, pos_y = EXCLUDED.pos_y, tag_name = EXCLUDED.tag_name
                 RETURNING id;";
 
             foreach (var node in nodes)
@@ -190,20 +209,45 @@ namespace Prod_IssueTracker_POC.Web.Services
                     catalogTagId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                 }
 
-                await using (var cmd = new NpgsqlCommand(upsertFlowTagSql, conn, tx))
+                // A ClientId that parses as an int is an existing flow_tags
+                // row (its own id); anything else (e.g. "new-3") is a node
+                // the builder created client-side and never yet saved.
+                int? existingRowId = int.TryParse(node.ClientId, out var parsedId) ? parsedId : null;
+                int? updatedId = null;
+
+                if (existingRowId.HasValue)
                 {
+                    await using var cmd = new NpgsqlCommand(updateExistingFlowTagSql, conn, tx);
+                    cmd.Parameters.AddWithValue("id", existingRowId.Value);
                     cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
                     cmd.Parameters.AddWithValue("tagId", catalogTagId);
                     cmd.Parameters.AddWithValue("tagName", node.TagName);
                     cmd.Parameters.AddWithValue("isTerminal", node.IsTerminal);
                     cmd.Parameters.AddWithValue("x", (int)Math.Round(node.X));
                     cmd.Parameters.AddWithValue("y", (int)Math.Round(node.Y));
-                    var id = await cmd.ExecuteScalarAsync();
-                    flowTagIdByName[node.TagName] = Convert.ToInt32(id);
+                    var result = await cmd.ExecuteScalarAsync();
+                    if (result != null) updatedId = Convert.ToInt32(result);
                 }
+
+                // No matching existing row (either a brand-new node, or a
+                // stale/foreign ClientId that didn't match this flow) —
+                // insert it fresh.
+                if (updatedId == null)
+                {
+                    await using var cmd = new NpgsqlCommand(insertFlowTagSql, conn, tx);
+                    cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
+                    cmd.Parameters.AddWithValue("tagId", catalogTagId);
+                    cmd.Parameters.AddWithValue("tagName", node.TagName);
+                    cmd.Parameters.AddWithValue("isTerminal", node.IsTerminal);
+                    cmd.Parameters.AddWithValue("x", (int)Math.Round(node.X));
+                    cmd.Parameters.AddWithValue("y", (int)Math.Round(node.Y));
+                    updatedId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+                }
+
+                flowTagIdByClientId[node.ClientId] = updatedId.Value;
             }
 
-            // Remove tags that were deleted in the builder (not present in
+            // Remove nodes that were deleted in the builder (not present in
             // this save) — cascades to any transitions referencing them.
             const string deleteRemovedTagsSql = @"
                 DELETE FROM flow_tags
@@ -212,7 +256,7 @@ namespace Prod_IssueTracker_POC.Web.Services
             await using (var cmd = new NpgsqlCommand(deleteRemovedTagsSql, conn, tx))
             {
                 cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
-                cmd.Parameters.AddWithValue("keepIds", flowTagIdByName.Values.ToArray());
+                cmd.Parameters.AddWithValue("keepIds", flowTagIdByClientId.Values.ToArray());
                 await cmd.ExecuteNonQueryAsync();
             }
 
@@ -229,8 +273,8 @@ namespace Prod_IssueTracker_POC.Web.Services
                 ON CONFLICT (from_tag_id, to_tag_id) DO NOTHING;";
             foreach (var edge in edges)
             {
-                if (!flowTagIdByName.TryGetValue(edge.From, out var fromId)) continue;
-                if (!flowTagIdByName.TryGetValue(edge.To, out var toId)) continue;
+                if (!flowTagIdByClientId.TryGetValue(edge.From, out var fromId)) continue;
+                if (!flowTagIdByClientId.TryGetValue(edge.To, out var toId)) continue;
                 if (fromId == toId) continue; // self-loops are meaningless — retries are handled automatically by FlowValidator
 
                 await using var cmd = new NpgsqlCommand(insertTransitionSql, conn, tx);
@@ -241,6 +285,7 @@ namespace Prod_IssueTracker_POC.Web.Services
             }
 
             await tx.CommitAsync();
+            return flowTagIdByClientId;
         }
 
         /// <summary>

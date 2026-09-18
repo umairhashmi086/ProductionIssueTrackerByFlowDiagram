@@ -21,6 +21,13 @@ namespace Prod_IssueTracker_POC.Web.Models
     public class FlowTransitionRow
     {
         public int Id { get; set; }
+        // FromTagId/ToTagId are flow_tags.id — the actual node identity on
+        // the canvas (a tag can now have more than one node/id in the same
+        // flow), used to rebuild the builder's edges exactly. FromTagName/
+        // ToTagName are kept for GetFlowDefinitionAsync's tag-name-keyed
+        // adjacency map, which FlowValidator consumes.
+        public int FromTagId { get; set; }
+        public int ToTagId { get; set; }
         public string FromTagName { get; set; } = "";
         public string ToTagName { get; set; } = "";
     }
@@ -45,6 +52,13 @@ namespace Prod_IssueTracker_POC.Web.Models
 
     public class GraphNodeDto
     {
+        // Node identity independent of TagName so the same tag can appear
+        // as more than one node on the canvas. For a node loaded from the
+        // DB this is its flow_tags.id (as a string); for a node the user
+        // just added in the browser it's a client-generated placeholder
+        // (e.g. "new-3") that SaveGraphAsync recognizes as "not yet in the
+        // DB" and inserts as a brand-new row.
+        public string ClientId { get; set; } = "";
         public string TagName { get; set; } = "";
         public bool IsTerminal { get; set; }
         // double (not int): the canvas sends pixel coordinates that can be
@@ -58,6 +72,9 @@ namespace Prod_IssueTracker_POC.Web.Models
 
     public class GraphEdgeDto
     {
+        // References GraphNodeDto.ClientId, not a tag name — an edge
+        // always connects two specific node instances, which matters once
+        // a tag can have multiple nodes in the same flow.
         public string From { get; set; } = "";
         public string To { get; set; } = "";
     }

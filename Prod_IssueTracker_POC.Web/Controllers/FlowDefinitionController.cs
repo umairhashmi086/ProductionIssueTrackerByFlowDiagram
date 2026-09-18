@@ -75,8 +75,8 @@ namespace Prod_IssueTracker_POC.Web.Controllers
             if (request.FlowDefinitionId <= 0)
                 return BadRequest(new { message = "Missing flowDefinitionId" });
 
-            await _repo.SaveGraphAsync(request.FlowDefinitionId, request.Nodes, request.Edges);
-            return Ok(new { message = "Saved", tagCount = request.Nodes.Count, transitionCount = request.Edges.Count });
+            var idMap = await _repo.SaveGraphAsync(request.FlowDefinitionId, request.Nodes, request.Edges);
+            return Ok(new { message = "Saved", tagCount = request.Nodes.Count, transitionCount = request.Edges.Count, nodeIdMap = idMap });
         }
     }
 }
