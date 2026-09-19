@@ -13,11 +13,13 @@
     });
 }
 
-<div class="section-label" style="margin-top:0;">@Model.FlowName</div>
-@if (!string.IsNullOrEmpty(Model.Description))
-{
-    <p class="hint">@Model.Description</p>
-}
+<div style="margin-bottom: 24px;">
+    <h1 style="margin: 0 0 4px; font-size: 24px; font-weight: 600;">@Model.FlowName</h1>
+    @if (!string.IsNullOrEmpty(Model.Description))
+    {
+        <p style="color: var(--text-dim); margin: 0; font-size: 13px;">@Model.Description</p>
+    }
+</div>
 
 <div class="builder-toolbar">
     <button type="button" id="modeSelect" class="mode-btn active">Select / Drag</button>

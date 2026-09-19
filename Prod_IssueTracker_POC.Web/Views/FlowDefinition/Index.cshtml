@@ -3,18 +3,19 @@
     ViewData["Title"] = "Flow Definitions";
 }
 
-<div class="section-label" style="margin-top:0;">Flow Definitions (Postgres-backed)</div>
-<p class="hint" style="margin-bottom:16px;">
-    Flows created here are picked up automatically by the investigator — no code changes needed.
-    A DB-defined flow takes priority over a hardcoded FlowMaps.cs entry with the same name.
-</p>
+<div style="margin-bottom: 32px;">
+    <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 600;">Flow Definitions</h1>
+    <p style="color: var(--text-dim); margin: 0; font-size: 13px;">Manage transaction flow definitions</p>
+</div>
 
-<a class="btn" style="display:inline-block; text-decoration:none; margin-bottom:20px;" asp-action="Create" asp-controller="FlowDefinition">+ New Flow</a>
-<a class="mode-btn" style="display:inline-block; text-decoration:none; margin-bottom:20px; margin-left:8px;" asp-action="Index" asp-controller="Tag">🏷 Manage Tags</a>
+<div style="display: flex; gap: 8px; margin-bottom: 24px;">
+    <a class="btn" style="display:inline-block; text-decoration:none;" asp-action="Create" asp-controller="FlowDefinition">+ Create Flow</a>
+    <a class="mode-btn" style="display:inline-block; text-decoration:none;" asp-action="Index" asp-controller="Tag">🏷 Manage Tags</a>
+</div>
 
 @if (Model.Count == 0)
 {
-    <div class="empty">No flow definitions yet — create one above.</div>
+    <div class="empty">No flow definitions yet — create one to get started.</div>
 }
 else
 {
@@ -33,6 +34,7 @@ else
     </div>
 }
 
-<div class="hint" style="margin-top:24px;">
+<div class="hint" style="margin-top:32px;">
     <a asp-action="Index" asp-controller="Investigate">← Back to Investigate</a>
 </div>
+

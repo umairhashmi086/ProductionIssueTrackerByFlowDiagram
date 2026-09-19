@@ -3,11 +3,16 @@
     ViewData["Title"] = "Investigate";
 }
 
+<div style="margin-bottom: 32px;">
+    <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 600;">Investigate Transactions</h1>
+    <p style="color: var(--text-dim); margin: 0; font-size: 13px;">Search for transaction attempts by Reference Number or Kong ID</p>
+</div>
+
 <form asp-action="Reference" asp-controller="Investigate" method="get" class="search-form" target="_blank">
     <div class="search-field">
         <label for="flowNameSelect">Flow</label>
         <select id="flowNameSelect" name="flowName">
-            <option value="All">All</option>
+            <option value="All">All Flows</option>
             @foreach (var flow in Model.FlowNames)
             {
                 <option value="@flow">@flow</option>
@@ -16,28 +21,19 @@
     </div>
 
     <div class="search-field">
-        <label for="referenceNumberInput">Reference number</label>
+        <label for="referenceNumberInput">Reference Number</label>
         <input id="referenceNumberInput" type="text" name="referenceNumber" placeholder="e.g. MG-2026-00417" />
     </div>
 
     <div class="search-field">
-        <label for="kongIdInput">— or Kong ID —</label>
-        <input id="kongIdInput" type="text" name="kongId" placeholder="e.g. demo-attempt-1-a1b2c3" />
+        <label for="kongIdInput">Or Kong ID</label>
+        <input id="kongIdInput" type="text" name="kongId" placeholder="Correlation ID" />
     </div>
 
-    <button type="submit">Investigate</button>
+    <button type="submit" style="margin-top: 24px;">Search</button>
 </form>
 
-<div class="hint">
-    Fill in either Reference number or Kong ID (not both) — Kong ID looks up one specific attempt directly.
-    Picking a Flow narrows the search to that flow type only; leave it as "All flows" to search across everything.
+<div class="hint" style="margin-top: 16px; max-width: 600px;">
+    Enter either a Reference Number (to see all attempts) or Kong ID (for a specific request). Optionally filter by Flow type.
 </div>
 
-<div class="hint">
-    No data yet?
-    <form asp-action="SeedDemo" asp-controller="Investigate" method="post" target="_blank">
-        <button type="submit" class="linklike">Seed the MoneyGram demo scenario</button>
-    </form>
-    Or call the API project's <code>GetFee</code> endpoint a couple of times with the same
-    <code>referenceNumber</code> to generate real FeeService data instead.
-</div>

@@ -1,25 +1,28 @@
 @model CreateFlowDefinitionViewModel
 @{
-    ViewData["Title"] = "New Flow Definition";
+    ViewData["Title"] = "Create Flow Definition";
 }
 
-<div class="section-label" style="margin-top:0;">New Flow Definition</div>
+<div style="margin-bottom: 32px;">
+    <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 600;">Create Flow</h1>
+    <p style="color: var(--text-dim); margin: 0; font-size: 13px;">Define a new transaction flow</p>
+</div>
 
-<form asp-action="Create" asp-controller="FlowDefinition" method="post" style="display:flex; flex-direction:column; gap:14px; max-width:480px;">
+<form asp-action="Create" asp-controller="FlowDefinition" method="post" style="display:flex; flex-direction:column; gap:16px; max-width:480px;">
     <div class="search-field">
-        <label for="flowNameInput">Flow name</label>
-        <input id="flowNameInput" asp-for="FlowName" placeholder="e.g. RemittancePayoutFlow" style="min-width: 100%;" />
+        <label for="flowNameInput">Flow Name</label>
+        <input id="flowNameInput" asp-for="FlowName" placeholder="e.g. RemittancePayoutFlow" style="min-width: 100%;" required />
         <span asp-validation-for="FlowName" style="color:var(--danger); font-size:12px;"></span>
     </div>
+
     <div class="search-field">
-        <label for="descriptionInput">Description (optional)</label>
-        <input id="descriptionInput" asp-for="Description" placeholder="What this flow represents" style="min-width: 100%;" />
+        <label for="descriptionInput">Description</label>
+        <input id="descriptionInput" asp-for="Description" placeholder="Brief description of this flow" style="min-width: 100%;" />
     </div>
-    <div>
-        <button type="submit">Create</button>
+
+    <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <button type="submit" class="btn">Create Flow</button>
+        <a asp-action="Index" asp-controller="FlowDefinition" class="mode-btn" style="text-decoration: none; padding: 10px 18px; display: inline-block;">Cancel</a>
     </div>
 </form>
 
-<div class="hint" style="margin-top:24px;">
-    <a asp-action="Index" asp-controller="FlowDefinition">← Back to Flow Definitions</a>
-</div>
