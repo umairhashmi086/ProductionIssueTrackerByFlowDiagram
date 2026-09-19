@@ -3,12 +3,12 @@
 ################################################################################
 
 /.vs/Prod_IssueTracker_POC
-/obj/Docker
-/Prod_IssueTracker_POC/bin/Debug/net8.0
+/obj/
+/Prod_IssueTracker_POC/bin/
 /Prod_IssueTracker_POC/obj
-/Prod_IssueTracker_POC.Web/bin/Debug/net8.0
-/Prod_IssueTracker_POC.Web/obj/Container
+/Prod_IssueTracker_POC.Web/bin/
+/Prod_IssueTracker_POC.Web/obj/
 /bin/Debug
-/Prod_IssueTracker_POC.Web/obj/Debug/net8.0
+/Prod_IssueTracker_POC.Web/obj/
 /obj/Debug
 /.vs/ProjectEvaluation
