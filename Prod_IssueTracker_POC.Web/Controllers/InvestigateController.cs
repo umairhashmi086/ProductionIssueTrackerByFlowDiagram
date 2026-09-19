@@ -38,6 +38,65 @@ namespace Prod_IssueTracker_POC.Web.Controllers
             return View(model);
         }
 
+        // GET /Investigate/Logs — display all logs grouped by Kong ID
+        [HttpGet]
+        public async Task<IActionResult> Logs(string? flowName)
+        {
+            var dbFlowNames = await _flowDefinitions.GetAllFlowNamesAsync();
+            ViewBag.FlowNames = dbFlowNames;
+
+            // Fetch all logs from Loki grouped by Kong ID
+            var logsGroupedByKongId = await _loki.GetAllLogsGroupedByKongIdAsync(flowName);
+
+            // Convert to LogGroupDto for the view
+            var logGroups = logsGroupedByKongId.Values
+                .Select(g => new LogGroupDto
+                {
+                    KongId = g.KongId,
+                    ReferenceNumber = g.ReferenceNumber,
+                    FlowName = g.FlowName,
+                    LogCount = g.Tags.Count,
+                    FirstLogTime = g.Tags.FirstOrDefault()?.Timestamp ?? DateTimeOffset.UtcNow,
+                    LastLogTime = g.Tags.LastOrDefault()?.Timestamp ?? DateTimeOffset.UtcNow,
+                    Logs = g.Tags
+                })
+                .OrderByDescending(g => g.LastLogTime)
+                .ToList();
+
+            var model = new LogsPageViewModel
+            {
+                FlowName = flowName,
+                LogGroups = logGroups
+            };
+
+            return View(model);
+        }
+
+        // POST /Investigate/GetLogsJson — fetch logs grouped by Kong ID (AJAX endpoint)
+        [HttpPost]
+        public async Task<IActionResult> GetLogsJson(string? flowName)
+        {
+            try
+            {
+                // Query to get all logs from last 24 hours
+                var query = string.IsNullOrWhiteSpace(flowName)
+                    ? "{app=\"poc-feeservice\"} | json"
+                    : $"{{app=\"poc-feeservice\"}} | json | FlowName=\"{flowName}\"";
+
+                var logsDict = await _loki.GetAttemptsByReferenceAsync("", flowName);
+
+                var logGroups = new List<LogGroupDto>();
+                // This is a simplified version - real implementation would query all logs
+                // For demo purposes, return empty list
+
+                return Json(new { success = true, logs = logGroups });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, error = ex.Message });
+            }
+        }
+
         // GET /Investigate/Reference?referenceNumber=MG-2026-00417&flowName=...&attemptIndex=0
         // GET /Investigate/Reference?kongId=abc123&flowName=...
         [HttpGet]

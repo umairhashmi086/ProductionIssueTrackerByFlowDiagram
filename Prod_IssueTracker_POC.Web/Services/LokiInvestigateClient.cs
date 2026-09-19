@@ -61,6 +61,34 @@ namespace Prod_IssueTracker_POC.Web.Services
         }
 
         /// <summary>
+        /// Fetches all logs from the last 24 hours, grouped by Kong ID.
+        /// Optionally filters by flow name if provided.
+        /// Used for the logs browser page to display all transaction attempts.
+        /// </summary>
+        public async Task<Dictionary<string, LogGroupData>> GetAllLogsGroupedByKongIdAsync(string? flowName = null)
+        {
+            var query = BuildQuery("", flowName);
+            var entries = await QueryAsync(query);
+
+            var grouped = entries
+                .GroupBy(e => e.KongId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => new LogGroupData
+                    {
+                        KongId = g.Key,
+                        ReferenceNumber = g.First().ReferenceNumber,
+                        FlowName = g.First().FlowName,
+                        Tags = g.OrderBy(e => e.Timestamp)
+                            .Select(e => new TagDto { TagName = e.TagName, Timestamp = e.Timestamp, MetadataJson = e.MetadataJson })
+                            .ToList()
+                    }
+                );
+
+            return grouped;
+        }
+
+        /// <summary>
         /// Returns the FlowName for a reference number by looking at the first
         /// tag found (all attempts under one reference share a flow). Null if
         /// nothing was found at all.
@@ -75,10 +103,19 @@ namespace Prod_IssueTracker_POC.Web.Services
         private string BuildQuery(string filterClause, string? flowName)
         {
             var flowClause = string.IsNullOrWhiteSpace(flowName) ? "" : $" | FlowName=\"{flowName}\"";
-            return $"{{app=\"{_appLabel}\"}} | json | {filterClause}{flowClause}";
+            var filter = string.IsNullOrWhiteSpace(filterClause) ? "" : $" | {filterClause}";
+            return $"{{app=\"{_appLabel}\"}} | json{filter}{flowClause}";
         }
 
         private record RawEntry(string KongId, string ReferenceNumber, string FlowName, string TagName, string? MetadataJson, DateTimeOffset Timestamp);
+
+        public class LogGroupData
+        {
+            public string KongId { get; set; } = "";
+            public string ReferenceNumber { get; set; } = "";
+            public string FlowName { get; set; } = "";
+            public List<TagDto> Tags { get; set; } = new();
+        }
 
         private async Task<List<RawEntry>> QueryAsync(string logQlQuery)
         {

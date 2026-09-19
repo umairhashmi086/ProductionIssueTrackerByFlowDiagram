@@ -1,0 +1,126 @@
+@model LogsPageViewModel
+@{
+    ViewData["Title"] = "Transaction Logs";
+}
+
+<div style="margin-bottom: 32px;">
+    <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 600;">Transaction Logs</h1>
+    <p style="color: var(--text-dim); margin: 0; font-size: 13px;">Browse and analyze logs grouped by request ID (Kong ID)</p>
+</div>
+
+<form method="get" class="search-form" style="margin-bottom: 24px;">
+    @if (ViewBag.FlowNames != null && ((List<string>)ViewBag.FlowNames).Count > 0)
+    {
+        <div class="search-field">
+            <label for="flowNameSelect">Filter by Flow</label>
+            <select id="flowNameSelect" name="flowName">
+                <option value="">All Flows</option>
+                @foreach (var flow in (List<string>)ViewBag.FlowNames)
+                {
+                    if (Model.FlowName == flow)
+                    {
+                        <option value="@flow" selected="selected">@flow</option>
+                    }
+                    else
+                    {
+                        <option value="@flow">@flow</option>
+                    }
+                }
+            </select>
+        </div>
+    }
+    <button type="submit" style="margin-top: 24px;">Filter Logs</button>
+</form>
+
+@if (Model.LogGroups.Count == 0)
+{
+    <div class="empty" style="padding: 80px 0;">
+        <div style="font-size: 14px; margin-bottom: 16px;">No logs found</div>
+        <p style="color: var(--text-faint); font-size: 12px; margin: 0;">
+            Logs will appear here as transactions are processed.
+        </p>
+    </div>
+}
+else
+{
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+        @foreach (var group in Model.LogGroups)
+        {
+            <details class="log-group" style="background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 0;">
+                <summary style="padding: 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; list-style: none; user-select: none;">
+                    <div style="flex: 1;">
+                        <div class="num" style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px;">
+                            @group.KongId
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-faint); display: flex; gap: 16px;">
+                            <span>Ref: <strong>@group.ReferenceNumber</strong></span>
+                            <span>Flow: <strong>@group.FlowName</strong></span>
+                            <span>@group.LogCount log(s)</span>
+                        </div>
+                    </div>
+                    <div style="text-align: right; color: var(--text-faint); font-size: 11px;">
+                        <div style="margin-bottom: 4px;">@group.LastLogTime.ToString("HH:mm:ss")</div>
+                        <div style="color: var(--accent); font-weight: 600;">▾</div>
+                    </div>
+                </summary>
+
+                <div style="border-top: 1px solid var(--border); padding: 16px; background: var(--panel-2);">
+                    <div class="timeline">
+                        @foreach (var (log, index) in group.Logs.Select((log, i) => (log, i)))
+                        {
+                            <div class="tag-row" style="margin-bottom: @(index < group.Logs.Count - 1 ? "12px" : "0");">
+                                <div class="dot-col">
+                                    <div class="dot ok" style="background: var(--ok-bg); border: 1px solid var(--ok); color: var(--ok); display: flex; align-items: center; justify-content: center; width: 20px; height: 20px;">
+                                        @(index + 1)
+                                    </div>
+                                    @if (index < group.Logs.Count - 1)
+                                    {
+                                        <div class="connector" style="background: var(--ok);"></div>
+                                    }
+                                </div>
+                                <div class="tag-body">
+                                    <div class="tag-name" style="color: var(--accent); font-size: 13px;">@log.TagName</div>
+                                    <div class="tag-time">@log.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff")</div>
+                                    @if (!string.IsNullOrEmpty(log.MetadataJson))
+                                    {
+                                        <div class="tag-meta" style="margin-top: 6px; color: var(--text-faint); font-size: 11px; word-break: break-all;">
+                                            @log.MetadataJson
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </details>
+        }
+    </div>
+}
+
+<div class="hint" style="margin-top: 32px;">
+    <a asp-action="Index" asp-controller="Investigate">← Back to Investigate</a>
+</div>
+
+<style>
+    details.log-group {
+        transition: all 0.2s ease;
+    }
+
+    details.log-group[open] {
+        border-color: var(--accent);
+        background: var(--panel-2);
+    }
+
+    details.log-group summary:hover {
+        background: var(--panel-2);
+    }
+
+    details.log-group[open] summary {
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+    }
+
+    details.log-group summary::-webkit-details-marker {
+        display: none;
+    }
+</style>

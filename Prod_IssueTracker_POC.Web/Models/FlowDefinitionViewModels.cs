@@ -85,4 +85,22 @@ namespace Prod_IssueTracker_POC.Web.Models
         public List<GraphNodeDto> Nodes { get; set; } = new();
         public List<GraphEdgeDto> Edges { get; set; } = new();
     }
+
+    public class LogsPageViewModel
+    {
+        public List<LogGroupDto> LogGroups { get; set; } = new();
+        public string? SelectedKongId { get; set; }
+        public string? FlowName { get; set; }
+    }
+
+    public class LogGroupDto
+    {
+        public string KongId { get; set; } = "";
+        public string ReferenceNumber { get; set; } = "";
+        public string FlowName { get; set; } = "";
+        public int LogCount { get; set; }
+        public DateTimeOffset FirstLogTime { get; set; }
+        public DateTimeOffset LastLogTime { get; set; }
+        public List<TagDto> Logs { get; set; } = new();
+    }
 }
