@@ -85,4 +85,11 @@ namespace Prod_IssueTracker_POC.Web.Models
         public List<GraphNodeDto> Nodes { get; set; } = new();
         public List<GraphEdgeDto> Edges { get; set; } = new();
     }
+
+    public class SuggestFlowViewModel
+    {
+        public string SourceInput { get; set; } = "";
+        public string? FlowName { get; set; }
+        public SuggestedFlowModel? Suggestion { get; set; }
+    }
 }

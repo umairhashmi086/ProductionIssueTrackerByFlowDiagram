@@ -1,0 +1,234 @@
+@using Prod_IssueTracker_POC.Web.Services
+@model SuggestFlowViewModel
+@{
+    ViewData["Title"] = "Suggest Flow from Logs";
+}
+
+<div class="section-label" style="margin-top:0;">Suggest Flow from Logs</div>
+<p class="hint" style="margin-bottom:16px;">
+    Analyze tag sequences from Loki logs by Kong ID or Reference Number to automatically generate a flow diagram.
+    This saves time by discovering tag transitions from real request logs.
+</p>
+
+<div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+    <form id="suggestForm" style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <input type="text" id="kongIdInput" name="kongId" placeholder="Kong ID (request correlation ID)" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+        <input type="text" id="referenceInput" name="reference" placeholder="Or Reference Number" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+
+        @if (ViewBag.FlowNames != null && ((List<string>)ViewBag.FlowNames).Count > 0)
+        {
+            <select id="flowNameInput" name="flowName" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <option value="">All Flows</option>
+                @foreach (var name in (List<string>)ViewBag.FlowNames)
+                {
+                    <option value="@name">@name</option>
+                }
+            </select>
+        }
+        else
+        {
+            <input type="text" id="flowNameInput" name="flowName" placeholder="Flow name (optional)" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+        }
+
+        <button type="submit" class="btn" style="display: inline-block; text-decoration: none; white-space: nowrap;">Suggest Flow</button>
+    </form>
+    <div id="loadingMessage" style="display: none; color: #666; margin-top: 8px;">Loading...</div>
+    <div id="errorMessage" style="display: none; color: #d32f2f; margin-top: 8px; padding: 8px; background: #ffebee; border-radius: 4px;"></div>
+</div>
+
+@if (Model.Suggestion != null)
+{
+    <div style="background: #e8f5e9; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+        <div style="font-weight: bold; color: #2e7d32; margin-bottom: 8px;">✓ Suggestion Generated</div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; font-size: 14px;">
+            <div>
+                <div style="color: #666; font-size: 12px; text-transform: uppercase;">Source</div>
+                <div style="font-weight: bold;">@Model.Suggestion.SourceKongIdOrReference</div>
+            </div>
+            <div>
+                <div style="color: #666; font-size: 12px; text-transform: uppercase;">Suggested Flow Name</div>
+                <input type="text" id="flowNameField" value="@Model.Suggestion.SuggestedFlowName" style="width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <div>
+                <div style="color: #666; font-size: 12px; text-transform: uppercase;">Tags Found</div>
+                <div style="font-weight: bold;">@Model.Suggestion.TagCount</div>
+            </div>
+            <div>
+                <div style="color: #666; font-size: 12px; text-transform: uppercase;">Transitions</div>
+                <div style="font-weight: bold;">@Model.Suggestion.TransitionCount</div>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+            <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">Tag Sequence:</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                @for (int i = 0; i < Model.Suggestion.TagSequence.Count; i++)
+                {
+                    <span style="background: #2e7d32; color: white; padding: 6px 12px; border-radius: 4px; font-size: 12px;">@Model.Suggestion.TagSequence[i]</span>
+                    @if (i < Model.Suggestion.TagSequence.Count - 1)
+                    {
+                        <span style="color: #999; font-weight: bold;">→</span>
+                    }
+                }
+            </div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+            <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">Suggested Nodes and Transitions:</div>
+            <div style="background: white; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto;">
+                <div><strong>Nodes:</strong></div>
+                @foreach (var node in Model.Suggestion.Nodes)
+                {
+                    <div style="margin-left: 16px; color: #1976d2;">
+                        @node.TagName
+                        @if (node.IsTerminal) { <span style="color: #d32f2f;">[TERMINAL]</span> }
+                    </div>
+                }
+
+                <div style="margin-top: 8px;"><strong>Transitions:</strong></div>
+                @foreach (var edge in Model.Suggestion.Edges)
+                {
+                    var fromNode = Model.Suggestion.Nodes.FirstOrDefault(n => n.ClientId == edge.From);
+                    var toNode = Model.Suggestion.Nodes.FirstOrDefault(n => n.ClientId == edge.To);
+                    <div style="margin-left: 16px; color: #2e7d32;">
+                        @(fromNode?.TagName ?? "?") → @(toNode?.TagName ?? "?")
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+            <button type="button" id="saveFlowButton" class="btn" style="display: inline-block; text-decoration: none;">✓ Import to Flow Builder</button>
+            <button type="button" class="mode-btn" onclick="document.getElementById('suggestForm').reset(); location.reload();" style="display: inline-block; text-decoration: none;">← Try Another</button>
+        </div>
+    </div>
+}
+
+<div class="hint">
+    <a asp-action="Index" asp-controller="FlowDefinition">← Back to Flow Definitions</a>
+</div>
+
+<style>
+    .section-label {
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: #333;
+    }
+
+    .hint {
+        font-size: 13px;
+        color: #666;
+    }
+
+    .btn {
+        background: #1976d2;
+        color: white;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .btn:hover {
+        background: #1565c0;
+    }
+
+    .mode-btn {
+        background: #f57c00;
+        color: white;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .mode-btn:hover {
+        background: #e65100;
+    }
+
+    button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+</style>
+
+<script>
+document.getElementById('suggestForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const kongId = document.getElementById('kongIdInput').value.trim();
+    const reference = document.getElementById('referenceInput').value.trim();
+    const flowName = document.getElementById('flowNameInput').value.trim();
+
+    if (!kongId && !reference) {
+        document.getElementById('errorMessage').textContent = 'Please enter either a Kong ID or Reference Number';
+        document.getElementById('errorMessage').style.display = 'block';
+        return;
+    }
+
+    document.getElementById('loadingMessage').style.display = 'block';
+    document.getElementById('errorMessage').style.display = 'none';
+
+    try {
+        const request = kongId
+            ? { kongId, flowName: flowName || null }
+            : { referenceNumber: reference, flowName: flowName || null };
+
+        const endpoint = kongId ? '/FlowDefinition/SuggestFromKongId' : '/FlowDefinition/SuggestFromReference';
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || `Error: ${response.status}`);
+        }
+
+        const suggestion = await response.json();
+
+        // Store suggestion in session and redirect to create flow with pre-filled data
+        sessionStorage.setItem('suggestedFlow', JSON.stringify(suggestion));
+        window.location.href = '/FlowDefinition/CreateFromSuggestion';
+    } catch (error) {
+        document.getElementById('errorMessage').textContent = error.message;
+        document.getElementById('errorMessage').style.display = 'block';
+    } finally {
+        document.getElementById('loadingMessage').style.display = 'none';
+    }
+});
+
+@if (Model.Suggestion != null)
+{
+    <script>
+    document.getElementById('saveFlowButton').addEventListener('click', async () => {
+        const flowName = document.getElementById('flowNameField').value.trim();
+        if (!flowName) {
+            alert('Please enter a flow name');
+            return;
+        }
+
+        // Create new flow
+        const createResponse = await fetch('/FlowDefinition/Create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                flowName: flowName,
+                description: 'Auto-generated from log analysis'
+            })
+        });
+
+        if (createResponse.ok || createResponse.status === 302) {
+            // Flow created, now redirect to edit with suggested graph
+            const suggestion = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Suggestion));
+            sessionStorage.setItem('suggestedGraph', JSON.stringify(suggestion));
+            window.location.href = `/FlowDefinition/Edit?flowName=${encodeURIComponent(flowName)}`;
+        }
+    });
+    </script>
+}

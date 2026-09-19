@@ -14,11 +14,13 @@ namespace Prod_IssueTracker_POC.Web.Controllers
     {
         private readonly FlowDefinitionRepository _repo;
         private readonly TagRepository _tagRepo;
+        private readonly SuggestedFlowService _suggestedFlow;
 
-        public FlowDefinitionController(FlowDefinitionRepository repo, TagRepository tagRepo)
+        public FlowDefinitionController(FlowDefinitionRepository repo, TagRepository tagRepo, SuggestedFlowService suggestedFlow)
         {
             _repo = repo;
             _tagRepo = tagRepo;
+            _suggestedFlow = suggestedFlow;
         }
 
         // GET /FlowDefinition — list all DB-defined flows
@@ -33,6 +35,15 @@ namespace Prod_IssueTracker_POC.Web.Controllers
         [HttpGet]
         public IActionResult Create() => View(new CreateFlowDefinitionViewModel());
 
+        // GET /FlowDefinition/Suggest — form to suggest a flow from logs
+        [HttpGet]
+        public async Task<IActionResult> Suggest()
+        {
+            var dbFlowNames = await _repo.GetAllFlowNamesAsync();
+            ViewBag.FlowNames = dbFlowNames;
+            return View(new SuggestFlowViewModel());
+        }
+
         // POST /FlowDefinition/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -46,6 +57,17 @@ namespace Prod_IssueTracker_POC.Web.Controllers
 
             await _repo.CreateFlowAsync(model.FlowName.Trim(), model.Description?.Trim());
             return RedirectToAction(nameof(Edit), new { flowName = model.FlowName.Trim() });
+        }
+
+        // GET /FlowDefinition/CreateFromSuggestion — creates a new flow and
+        // redirects to Edit with suggested graph pre-populated from sessionStorage.
+        [HttpGet]
+        public IActionResult CreateFromSuggestion()
+        {
+            return View("Create", new CreateFlowDefinitionViewModel
+            {
+                Description = "Auto-generated from log analysis"
+            });
         }
 
         // GET /FlowDefinition/Edit?flowName=X — the visual flow builder.
@@ -78,5 +100,42 @@ namespace Prod_IssueTracker_POC.Web.Controllers
             var idMap = await _repo.SaveGraphAsync(request.FlowDefinitionId, request.Nodes, request.Edges);
             return Ok(new { message = "Saved", tagCount = request.Nodes.Count, transitionCount = request.Edges.Count, nodeIdMap = idMap });
         }
+
+        // POST /FlowDefinition/SuggestFromKongId — analyzes a single Kong ID's logs
+        // and suggests a flow diagram based on its tag sequence.
+        [HttpPost]
+        public async Task<IActionResult> SuggestFromKongId([FromBody] SuggestFlowRequest? request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.KongId))
+                return BadRequest(new { message = "Missing or invalid kongId" });
+
+            var suggestion = await _suggestedFlow.SuggestFromKongIdAsync(request.KongId, request.FlowName, layoutNodes: true);
+            if (suggestion == null)
+                return NotFound(new { message = $"No logs found for Kong ID: {request.KongId}" });
+
+            return Ok(suggestion);
+        }
+
+        // POST /FlowDefinition/SuggestFromReference — analyzes all attempts for a
+        // reference number and suggests a flow diagram combining all tag sequences.
+        [HttpPost]
+        public async Task<IActionResult> SuggestFromReference([FromBody] SuggestFlowRequest? request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.ReferenceNumber))
+                return BadRequest(new { message = "Missing or invalid referenceNumber" });
+
+            var suggestion = await _suggestedFlow.SuggestFromReferenceAsync(request.ReferenceNumber, request.FlowName, layoutNodes: true);
+            if (suggestion == null)
+                return NotFound(new { message = $"No logs found for reference: {request.ReferenceNumber}" });
+
+            return Ok(suggestion);
+        }
     }
+}
+
+public class SuggestFlowRequest
+{
+    public string? KongId { get; set; }
+    public string? ReferenceNumber { get; set; }
+    public string? FlowName { get; set; }
 }

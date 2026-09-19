@@ -28,6 +28,10 @@ builder.Services.AddScoped<FlowDefinitionRepository>();
 // picker so tag names can be reused instead of retyped every time.
 builder.Services.AddScoped<TagRepository>();
 
+// Analyzes logs by Kong ID or Reference Number to suggest flow diagrams,
+// helping users create flows faster without manual design.
+builder.Services.AddScoped<SuggestedFlowService>();
+
 // Renders the DownloadReport view to an HTML string for file downloads.
 builder.Services.AddScoped<RazorViewRenderer>();
 

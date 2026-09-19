@@ -84,6 +84,31 @@
     let availableTags = (initial.availableTags || []).slice();
     const flowDefinitionId = initial.flowDefinitionId;
 
+    // Check if a suggested graph was stored in sessionStorage (from the Suggest page)
+    if (nodes.length === 0 && sessionStorage.getItem('suggestedGraph')) {
+        try {
+            const suggested = JSON.parse(sessionStorage.getItem('suggestedGraph'));
+            nodes = (suggested.nodes || []).map(n => ({
+                clientId: n.clientId || `suggested-${Math.random().toString(36).substr(2, 9)}`,
+                tagName: n.tagName,
+                isTerminal: n.isTerminal || false,
+                x: n.x || 0,
+                y: n.y || 0
+            }));
+            edges = (suggested.edges || []).map(e => ({ ...e }));
+            sessionStorage.removeItem('suggestedGraph');
+
+            // Show a notification
+            const notification = document.createElement('div');
+            notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #4caf50; color: white; padding: 12px 16px; border-radius: 4px; z-index: 50; box-shadow: 0 2px 8px rgba(0,0,0,0.2);';
+            notification.textContent = '✓ Suggested graph loaded. Review and customize as needed.';
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 4000);
+        } catch (e) {
+            console.error('Failed to load suggested graph:', e);
+        }
+    }
+
     const NODE_W = 150, NODE_H = 46;
     let mode = 'select';
     let connectFrom = null;
