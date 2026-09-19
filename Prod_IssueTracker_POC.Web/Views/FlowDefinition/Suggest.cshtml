@@ -192,9 +192,11 @@ document.getElementById('suggestForm').addEventListener('submit', async (e) => {
 
         const suggestion = await response.json();
 
-        // Store suggestion in session and redirect to create flow with pre-filled data
-        sessionStorage.setItem('suggestedFlow', JSON.stringify(suggestion));
-        window.location.href = '/FlowDefinition/CreateFromSuggestion';
+        // Store suggestion in sessionStorage for the flow builder to load
+        sessionStorage.setItem('suggestedFlowData', JSON.stringify(suggestion));
+
+        // Show the suggestion with the import button
+        location.reload();
     } catch (error) {
         document.getElementById('errorMessage').textContent = error.message;
         document.getElementById('errorMessage').style.display = 'block';
@@ -213,22 +215,63 @@ document.getElementById('suggestForm').addEventListener('submit', async (e) => {
             return;
         }
 
-        // Create new flow
-        const createResponse = await fetch('/FlowDefinition/Create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                flowName: flowName,
-                description: 'Auto-generated from log analysis'
-            })
-        });
+        // Disable button and show loading
+        const btn = document.getElementById('saveFlowButton');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Creating flow...';
 
-        if (createResponse.ok || createResponse.status === 302) {
-            // Flow created, now redirect to edit with suggested graph
+        try {
+            // Store the full suggestion data in sessionStorage BEFORE creating the flow
             const suggestion = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Suggestion));
-            sessionStorage.setItem('suggestedGraph', JSON.stringify(suggestion));
-            window.location.href = `/FlowDefinition/Edit?flowName=${encodeURIComponent(flowName)}`;
+            sessionStorage.setItem('suggestedFlowData', JSON.stringify(suggestion));
+
+            // Create the flow via POST form (will trigger a redirect)
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/FlowDefinition/Create';
+
+            // Get CSRF token from page (ASP.NET includes it in hidden fields)
+            const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value ||
+                         getAntiForgeryToken();
+
+            const flowNameInput = document.createElement('input');
+            flowNameInput.type = 'hidden';
+            flowNameInput.name = 'FlowName';
+            flowNameInput.value = flowName;
+            form.appendChild(flowNameInput);
+
+            const descInput = document.createElement('input');
+            descInput.type = 'hidden';
+            descInput.name = 'Description';
+            descInput.value = 'Auto-generated from log analysis';
+            form.appendChild(descInput);
+
+            if (token) {
+                const tokenInput = document.createElement('input');
+                tokenInput.type = 'hidden';
+                tokenInput.name = '__RequestVerificationToken';
+                tokenInput.value = token;
+                form.appendChild(tokenInput);
+            }
+
+            document.body.appendChild(form);
+            form.submit();
+        } catch (error) {
+            alert('Error: ' + error.message);
+            btn.disabled = false;
+            btn.textContent = originalText;
         }
     });
+
+    // Helper to extract CSRF token from page
+    function getAntiForgeryToken() {
+        // Try various methods to get the token
+        let token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+        if (!token && window.__RequestVerificationToken) {
+            token = window.__RequestVerificationToken;
+        }
+        return token || '';
+    }
     </script>
 }

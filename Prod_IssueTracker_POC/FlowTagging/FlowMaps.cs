@@ -14,7 +14,7 @@ namespace Prod_IssueTracker_POC.FlowTagging
     /// </summary>
     public static class FlowMaps
     {
-        public const string GetFeeTransaction = "GetFeeTransaction";
+        public const string GetFeeRemittance = "GetFeeTransaction";
         public const string MoneyGramTransaction = "MoneyGramTransaction";
     }
 }

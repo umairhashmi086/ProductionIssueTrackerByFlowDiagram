@@ -1,3 +1,5 @@
+using Prod_IssueTracker_POC.Web.Services;
+
 namespace Prod_IssueTracker_POC.Web.Models
 {
     public class FlowDefinitionSummary
