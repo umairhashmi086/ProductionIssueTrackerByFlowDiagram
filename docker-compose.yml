@@ -31,6 +31,8 @@ services:
       # Writes: only used by the "seed demo data" button, which asks the
       # producer's own API to log a scenario — see DemoSeedClient.cs.
       - InvestigateApi__BaseUrl=http://investigate-api:8080
+      # Connect to local PostgreSQL on host machine
+      - ConnectionStrings__FlowDefinitionsDb=Server=host.docker.internal;Port=5432;Database=TestDb;User ID=postgres;Password=Seer@2021;
     depends_on:
       - investigate-api
       - loki
@@ -40,6 +42,7 @@ services:
     ports:
       - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
+
   postgres:
     image: postgres:16-alpine
     ports:
