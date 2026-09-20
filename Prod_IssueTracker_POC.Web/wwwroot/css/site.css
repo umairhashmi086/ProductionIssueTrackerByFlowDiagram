@@ -2,7 +2,7 @@
   --bg: #0f1115; --panel: #161a21; --panel-2: #1c212a; --border: #262c37;
   --text: #e6e9ef; --text-dim: #9aa3b2; --text-faint: #5c6577;
   --accent: #4f8cff; --ok: #2ecc71; --ok-bg: #12271c;
-  --danger: #ef5350; --danger-bg: #2b1414;
+  --danger: #ef5350; --danger-bg: #2b1414; --neutral: #8b949e; --neutral-bg: #1c252d;
   --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
@@ -45,17 +45,21 @@ h1, h2, h3 { margin: 0; }
 .attempt-tab.active { border-color: var(--accent); background: var(--panel-2); }
 .attempt-tab.ok { border-left: 3px solid var(--ok); }
 .attempt-tab.bad { border-left: 3px solid var(--danger); }
+.attempt-tab.neutral { border-left: 3px solid var(--neutral); }
 .attempt-tab .num { font-size: 13px; font-weight: 600; color: var(--text); }
 .attempt-tab .time { font-size: 11px; color: var(--text-faint); font-family: var(--mono); margin-top: 4px; }
 .attempt-tab .status { font-size: 12px; margin-top: 6px; }
 .attempt-tab .status.ok { color: var(--ok); }
 .attempt-tab .status.bad { color: var(--danger); }
+.attempt-tab .status.neutral { color: var(--neutral); }
 .link-banner { background: var(--panel-2); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: var(--text-dim); }
 .link-banner b { color: var(--accent); }
 .health-banner { border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; }
 .health-banner.ok { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok); }
 .health-banner.bad { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger); }
-.diagram-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
+.no-diagram-banner { background: var(--neutral-bg); color: var(--neutral); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; }
+.diagram-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; max-width: 100%; overflow-x: auto; }
+.diagram-panel svg { max-width: 100%; height: auto; min-height: 300px; }
 .diagram-panel h3 { margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; }
 .diagram-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 11px; color: var(--text-faint); }
 .diagram-legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -63,10 +67,12 @@ h1, h2, h3 { margin: 0; }
 .section-label { font-size: 12px; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; margin: 20px 0 10px; }
 .timeline { display: flex; flex-direction: column; }
 .tag-row { display: flex; gap: 12px; }
+.tag-row.not-configured .tag-name { color: var(--neutral); }
 .dot-col { display: flex; flex-direction: column; align-items: center; }
 .dot { width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0; }
 .dot.ok { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok); }
 .dot.bad { background: var(--danger); color: #fff; }
+.dot.neutral { background: var(--neutral-bg); color: var(--neutral); border: 1px solid var(--border); }
 .connector { width: 1px; flex: 1; background: var(--border); min-height: 18px; }
 .connector.bad { background: var(--danger); }
 .tag-body { padding-bottom: 18px; flex: 1; }

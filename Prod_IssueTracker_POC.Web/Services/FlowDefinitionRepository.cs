@@ -173,119 +173,127 @@ namespace Prod_IssueTracker_POC.Web.Services
         /// </returns>
         public async Task<Dictionary<string, int>> SaveGraphAsync(int flowDefinitionId, List<GraphNodeDto> nodes, List<GraphEdgeDto> edges)
         {
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-            await using var tx = await conn.BeginTransactionAsync();
+            try
+            {
+                await using var conn = new NpgsqlConnection(_connectionString);
+                await conn.OpenAsync();
+                await using var tx = await conn.BeginTransactionAsync();
 
-            // Maps the builder's per-node ClientId (a flow_tags.id as a
-            // string for existing nodes, or a client-made placeholder like
-            // "new-3" for nodes just added in the browser) to the row's
-            // real flow_tags.id, so edges (which reference ClientId) can be
-            // resolved to real ids after inserts/updates below.
-            var flowTagIdByClientId = new Dictionary<string, int>();
+                // Maps the builder's per-node ClientId (a flow_tags.id as a
+                // string for existing nodes, or a client-made placeholder like
+                // "new-3" for nodes just added in the browser) to the row's
+                // real flow_tags.id, so edges (which reference ClientId) can be
+                // resolved to real ids after inserts/updates below.
+                var flowTagIdByClientId = new Dictionary<string, int>();
 
-            const string getOrCreateCatalogTagSql = @"
+                const string getOrCreateCatalogTagSql = @"
                 INSERT INTO tags (tag_name) VALUES (@tagName)
                 ON CONFLICT (tag_name) DO UPDATE SET tag_name = EXCLUDED.tag_name
                 RETURNING id;";
 
-            const string updateExistingFlowTagSql = @"
+                const string updateExistingFlowTagSql = @"
                 UPDATE flow_tags
                 SET tag_id = @tagId, tag_name = @tagName, is_terminal = @isTerminal, pos_x = @x, pos_y = @y
                 WHERE id = @id AND flow_definition_id = @flowId
                 RETURNING id;";
 
-            const string insertFlowTagSql = @"
+                const string insertFlowTagSql = @"
                 INSERT INTO flow_tags (flow_definition_id, tag_id, tag_name, is_terminal, pos_x, pos_y)
                 VALUES (@flowId, @tagId, @tagName, @isTerminal, @x, @y)
                 RETURNING id;";
 
-            foreach (var node in nodes)
-            {
-                int catalogTagId;
-                await using (var cmd = new NpgsqlCommand(getOrCreateCatalogTagSql, conn, tx))
+                foreach (var node in nodes)
                 {
-                    cmd.Parameters.AddWithValue("tagName", node.TagName);
-                    catalogTagId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+                    int catalogTagId;
+                    await using (var cmd = new NpgsqlCommand(getOrCreateCatalogTagSql, conn, tx))
+                    {
+                        cmd.Parameters.AddWithValue("tagName", node.TagName);
+                        catalogTagId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+                    }
+
+                    // A ClientId that parses as an int is an existing flow_tags
+                    // row (its own id); anything else (e.g. "new-3") is a node
+                    // the builder created client-side and never yet saved.
+                    int? existingRowId = int.TryParse(node.ClientId, out var parsedId) ? parsedId : null;
+                    int? updatedId = null;
+
+                    if (existingRowId.HasValue)
+                    {
+                        await using var cmd = new NpgsqlCommand(updateExistingFlowTagSql, conn, tx);
+                        cmd.Parameters.AddWithValue("id", existingRowId.Value);
+                        cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
+                        cmd.Parameters.AddWithValue("tagId", catalogTagId);
+                        cmd.Parameters.AddWithValue("tagName", node.TagName);
+                        cmd.Parameters.AddWithValue("isTerminal", node.IsTerminal);
+                        cmd.Parameters.AddWithValue("x", (int)Math.Round(node.X));
+                        cmd.Parameters.AddWithValue("y", (int)Math.Round(node.Y));
+                        var result = await cmd.ExecuteScalarAsync();
+                        if (result != null) updatedId = Convert.ToInt32(result);
+                    }
+
+                    // No matching existing row (either a brand-new node, or a
+                    // stale/foreign ClientId that didn't match this flow) —
+                    // insert it fresh.
+                    if (updatedId == null)
+                    {
+                        await using var cmd = new NpgsqlCommand(insertFlowTagSql, conn, tx);
+                        cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
+                        cmd.Parameters.AddWithValue("tagId", catalogTagId);
+                        cmd.Parameters.AddWithValue("tagName", node.TagName);
+                        cmd.Parameters.AddWithValue("isTerminal", node.IsTerminal);
+                        cmd.Parameters.AddWithValue("x", (int)Math.Round(node.X));
+                        cmd.Parameters.AddWithValue("y", (int)Math.Round(node.Y));
+                        updatedId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+                    }
+
+                    flowTagIdByClientId[node.ClientId] = updatedId.Value;
                 }
 
-                // A ClientId that parses as an int is an existing flow_tags
-                // row (its own id); anything else (e.g. "new-3") is a node
-                // the builder created client-side and never yet saved.
-                int? existingRowId = int.TryParse(node.ClientId, out var parsedId) ? parsedId : null;
-                int? updatedId = null;
-
-                if (existingRowId.HasValue)
-                {
-                    await using var cmd = new NpgsqlCommand(updateExistingFlowTagSql, conn, tx);
-                    cmd.Parameters.AddWithValue("id", existingRowId.Value);
-                    cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
-                    cmd.Parameters.AddWithValue("tagId", catalogTagId);
-                    cmd.Parameters.AddWithValue("tagName", node.TagName);
-                    cmd.Parameters.AddWithValue("isTerminal", node.IsTerminal);
-                    cmd.Parameters.AddWithValue("x", (int)Math.Round(node.X));
-                    cmd.Parameters.AddWithValue("y", (int)Math.Round(node.Y));
-                    var result = await cmd.ExecuteScalarAsync();
-                    if (result != null) updatedId = Convert.ToInt32(result);
-                }
-
-                // No matching existing row (either a brand-new node, or a
-                // stale/foreign ClientId that didn't match this flow) —
-                // insert it fresh.
-                if (updatedId == null)
-                {
-                    await using var cmd = new NpgsqlCommand(insertFlowTagSql, conn, tx);
-                    cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
-                    cmd.Parameters.AddWithValue("tagId", catalogTagId);
-                    cmd.Parameters.AddWithValue("tagName", node.TagName);
-                    cmd.Parameters.AddWithValue("isTerminal", node.IsTerminal);
-                    cmd.Parameters.AddWithValue("x", (int)Math.Round(node.X));
-                    cmd.Parameters.AddWithValue("y", (int)Math.Round(node.Y));
-                    updatedId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
-                }
-
-                flowTagIdByClientId[node.ClientId] = updatedId.Value;
-            }
-
-            // Remove nodes that were deleted in the builder (not present in
-            // this save) — cascades to any transitions referencing them.
-            const string deleteRemovedTagsSql = @"
+                // Remove nodes that were deleted in the builder (not present in
+                // this save) — cascades to any transitions referencing them.
+                const string deleteRemovedTagsSql = @"
                 DELETE FROM flow_tags
                 WHERE flow_definition_id = @flowId
                   AND NOT (id = ANY(@keepIds));";
-            await using (var cmd = new NpgsqlCommand(deleteRemovedTagsSql, conn, tx))
-            {
-                cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
-                cmd.Parameters.AddWithValue("keepIds", flowTagIdByClientId.Values.ToArray());
-                await cmd.ExecuteNonQueryAsync();
-            }
+                await using (var cmd = new NpgsqlCommand(deleteRemovedTagsSql, conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
+                    cmd.Parameters.AddWithValue("keepIds", flowTagIdByClientId.Values.ToArray());
+                    await cmd.ExecuteNonQueryAsync();
+                }
 
-            const string deleteAllTransitionsSql = "DELETE FROM flow_tag_transitions WHERE flow_definition_id = @flowId;";
-            await using (var cmd = new NpgsqlCommand(deleteAllTransitionsSql, conn, tx))
-            {
-                cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
-                await cmd.ExecuteNonQueryAsync();
-            }
+                const string deleteAllTransitionsSql = "DELETE FROM flow_tag_transitions WHERE flow_definition_id = @flowId;";
+                await using (var cmd = new NpgsqlCommand(deleteAllTransitionsSql, conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
+                    await cmd.ExecuteNonQueryAsync();
+                }
 
-            const string insertTransitionSql = @"
+                const string insertTransitionSql = @"
                 INSERT INTO flow_tag_transitions (flow_definition_id, from_tag_id, to_tag_id)
                 VALUES (@flowId, @fromId, @toId)
                 ON CONFLICT (from_tag_id, to_tag_id) DO NOTHING;";
-            foreach (var edge in edges)
-            {
-                if (!flowTagIdByClientId.TryGetValue(edge.From, out var fromId)) continue;
-                if (!flowTagIdByClientId.TryGetValue(edge.To, out var toId)) continue;
-                if (fromId == toId) continue; // self-loops are meaningless — retries are handled automatically by FlowValidator
+                foreach (var edge in edges)
+                {
+                    if (!flowTagIdByClientId.TryGetValue(edge.From, out var fromId)) continue;
+                    if (!flowTagIdByClientId.TryGetValue(edge.To, out var toId)) continue;
+                    if (fromId == toId) continue; // self-loops are meaningless — retries are handled automatically by FlowValidator
 
-                await using var cmd = new NpgsqlCommand(insertTransitionSql, conn, tx);
-                cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
-                cmd.Parameters.AddWithValue("fromId", fromId);
-                cmd.Parameters.AddWithValue("toId", toId);
-                await cmd.ExecuteNonQueryAsync();
+                    await using var cmd = new NpgsqlCommand(insertTransitionSql, conn, tx);
+                    cmd.Parameters.AddWithValue("flowId", flowDefinitionId);
+                    cmd.Parameters.AddWithValue("fromId", fromId);
+                    cmd.Parameters.AddWithValue("toId", toId);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                await tx.CommitAsync();
+                return flowTagIdByClientId;
             }
-
-            await tx.CommitAsync();
-            return flowTagIdByClientId;
+            catch (Exception ex) 
+            {
+                throw ex;
+            }
+           
         }
 
         /// <summary>

@@ -14,7 +14,7 @@ namespace Prod_IssueTracker_POC.Web.Services
     /// </summary>
     public static class FlowDiagramLayout
     {
-        private const double NodeW = 150, NodeH = 46, RowHeight = 100, ColWidth = 175, TopPad = 20, LeftPad = 20;
+        private const double NodeW = 60, NodeH = 30, RowHeight = 50, ColWidth = 90, TopPad = 20, LeftPad = 20;
 
         public static DiagramViewModel Build(
             Dictionary<string, string[]> flowMap,
@@ -177,7 +177,7 @@ namespace Prod_IssueTracker_POC.Web.Services
                 var marker = e.IsTraversed ? "url(#arrow-ok)" : "url(#arrow-dim)";
                 if (e.SameRow)
                 {
-                    sb.Append($"<path d=\"M {Fmt(e.X1)} {Fmt(e.Y1)} C {Fmt(e.X1 + 40)} {Fmt(e.Y1)}, {Fmt(e.X2 - 40)} {Fmt(e.Y2)}, {Fmt(e.X2)} {Fmt(e.Y2)}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"2\" marker-end=\"{marker}\" />");
+                    sb.Append($"<path d=\"M {Fmt(e.X1)} {Fmt(e.Y1)} C {Fmt(e.X1 + 40)} {Fmt(e.Y1)}, {Fmt(e.X2 - 40)} {Fmt(e.Y2)}, {Fmt(e.X2)} {Fmt(e.Y2)}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"1\" marker-end=\"{marker}\" />");
                 }
                 else
                 {
@@ -192,12 +192,12 @@ namespace Prod_IssueTracker_POC.Web.Services
                         // source) rather than appearing to run straight
                         // through — and hence "merge with" — that node.
                         var bow = NodeW / 2 + 45;
-                        sb.Append($"<path d=\"M {Fmt(e.X1)} {Fmt(e.Y1)} C {Fmt(e.X1 + bow)} {Fmt(e.Y1 + 20)}, {Fmt(e.X2 + bow)} {Fmt(e.Y2 - 20)}, {Fmt(e.X2)} {Fmt(e.Y2)}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"2\" marker-end=\"{marker}\" />");
+                        sb.Append($"<path d=\"M {Fmt(e.X1)} {Fmt(e.Y1)} C {Fmt(e.X1 + bow)} {Fmt(e.Y1 + 20)}, {Fmt(e.X2 + bow)} {Fmt(e.Y2 - 20)}, {Fmt(e.X2)} {Fmt(e.Y2)}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"1\" marker-end=\"{marker}\" />");
                     }
                     else
                     {
                         var midY = e.Y1 + (e.Y2 - e.Y1) / 2;
-                        sb.Append($"<path d=\"M {Fmt(e.X1)} {Fmt(e.Y1)} C {Fmt(e.X1)} {Fmt(midY)}, {Fmt(e.X2)} {Fmt(midY)}, {Fmt(e.X2)} {Fmt(e.Y2)}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"2\" marker-end=\"{marker}\" />");
+                        sb.Append($"<path d=\"M {Fmt(e.X1)} {Fmt(e.Y1)} C {Fmt(e.X1)} {Fmt(midY)}, {Fmt(e.X2)} {Fmt(midY)}, {Fmt(e.X2)} {Fmt(e.Y2)}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"1\" marker-end=\"{marker}\" />");
                     }
                 }
             }
@@ -221,17 +221,19 @@ namespace Prod_IssueTracker_POC.Web.Services
                 var boxH = isDimUnreached ? NodeH * 0.72 : NodeH;
                 var boxX = n.X + (NodeW - boxW) / 2;
                 var boxY = n.Y + (NodeH - boxH) / 2;
-                var fontSize = isDimUnreached ? 9 : 10;
+                var fontSize = isDimUnreached ? 3 : 4;
 
-                sb.Append($"<rect x=\"{Fmt(boxX)}\" y=\"{Fmt(boxY)}\" width=\"{Fmt(boxW)}\" height=\"{Fmt(boxH)}\" rx=\"8\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{(isBad ? "2.5" : "1.5")}\"{dashAttr} />");
+                sb.Append($"<rect x=\"{Fmt(boxX)}\" y=\"{Fmt(boxY)}\" width=\"{Fmt(boxW)}\" height=\"{Fmt(boxH)}\" rx=\"8\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{(isBad ? "1.5" : "1")}\"{dashAttr} />");
 
                 var labelLines = System.Text.RegularExpressions.Regex.Replace(n.Id, "([a-z])([A-Z])", "$1\n$2").Split('\n');
                 var lineHeight = fontSize + 3;
-                var startY = n.Y + 23 - ((labelLines.Length - 1) * lineHeight) / 2.0 + 4;
+                var textCenterX = n.X + NodeW / 2;
+                var textCenterY = n.Y + NodeH / 2;
+                var startY = textCenterY - ((labelLines.Length - 1) * lineHeight) / 2.0;
                 for (int li = 0; li < labelLines.Length; li++)
                 {
                     var lineY = startY + li * lineHeight;
-                    sb.Append($"<text x=\"{Fmt(n.X + 75)}\" y=\"{Fmt(lineY)}\" text-anchor=\"middle\" font-family=\"SFMono-Regular,Consolas,monospace\" font-size=\"{fontSize}\" font-weight=\"600\" fill=\"{textColor}\">{System.Net.WebUtility.HtmlEncode(labelLines[li])}</text>");
+                    sb.Append($"<text x=\"{Fmt(textCenterX)}\" y=\"{Fmt(lineY)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"SFMono-Regular,Consolas,monospace\" font-size=\"{fontSize}\" font-weight=\"300\" fill=\"{textColor}\">{System.Net.WebUtility.HtmlEncode(labelLines[li])}</text>");
                 }
 
                 var belowY = n.Y + NodeH + 14;
@@ -240,14 +242,14 @@ namespace Prod_IssueTracker_POC.Web.Services
                 {
                     var badgeText = $"retried:{n.RetryCount}";
                     var pillWidth = 16 + badgeText.Length * 5.2;
-                    sb.Append($"<rect x=\"{Fmt(n.X + 75 - pillWidth / 2)}\" y=\"{Fmt(belowY - 10)}\" width=\"{Fmt(pillWidth)}\" height=\"14\" rx=\"7\" fill=\"#2b2211\" stroke=\"#f0a93a\" stroke-width=\"1\" />");
-                    sb.Append($"<text x=\"{Fmt(n.X + 75)}\" y=\"{Fmt(belowY)}\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"9\" font-weight=\"600\" fill=\"#f0a93a\">{System.Net.WebUtility.HtmlEncode(badgeText)}</text>");
+                    sb.Append($"<rect x=\"{Fmt(textCenterX - pillWidth / 2)}\" y=\"{Fmt(belowY - 10)}\" width=\"{Fmt(pillWidth)}\" height=\"14\" rx=\"7\" fill=\"#2b2211\" stroke=\"#f0a93a\" stroke-width=\"0.75\" />");
+                    sb.Append($"<text x=\"{Fmt(textCenterX)}\" y=\"{Fmt(belowY)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"4\" font-weight=\"300\" fill=\"#f0a93a\">{System.Net.WebUtility.HtmlEncode(badgeText)}</text>");
                     belowY += 16;
                 }
 
                 if (n.IsDeadEnd)
                 {
-                    sb.Append($"<text x=\"{Fmt(n.X + 75)}\" y=\"{Fmt(belowY)}\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"10\" fill=\"#ef5350\">dead end</text>");
+                    sb.Append($"<text x=\"{Fmt(textCenterX)}\" y=\"{Fmt(belowY)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"5\" fill=\"#ef5350\">dead end</text>");
                     belowY += 14;
                 }
 
@@ -257,16 +259,16 @@ namespace Prod_IssueTracker_POC.Web.Services
                 // where the deviation actually went.
                 if (deviationsAfterNode.TryGetValue(n.Id, out var devCount))
                 {
-                    var cx = n.X + 75;
+                    var cx = textCenterX;
                     var cy = belowY + 4;
                     sb.Append($"<circle cx=\"{Fmt(cx)}\" cy=\"{Fmt(cy)}\" r=\"7\" fill=\"#ef5350\" />");
                     if (devCount > 1)
                     {
-                        sb.Append($"<text x=\"{Fmt(cx)}\" y=\"{Fmt(cy + 3)}\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"9\" font-weight=\"700\" fill=\"#0f1115\">{devCount}</text>");
+                        sb.Append($"<text x=\"{Fmt(cx)}\" y=\"{Fmt(cy + 3)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"4\" font-weight=\"300\" fill=\"#0f1115\">{devCount}</text>");
                     }
                     else
                     {
-                        sb.Append($"<text x=\"{Fmt(cx)}\" y=\"{Fmt(cy + 3)}\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"10\" font-weight=\"700\" fill=\"#0f1115\">!</text>");
+                        sb.Append($"<text x=\"{Fmt(cx)}\" y=\"{Fmt(cy + 3)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"5\" font-weight=\"300\" fill=\"#0f1115\">!</text>");
                     }
                 }
             }

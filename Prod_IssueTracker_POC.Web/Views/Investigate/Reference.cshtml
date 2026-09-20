@@ -18,10 +18,13 @@
     @for (int i = 0; i < Model.Attempts.Count; i++)
     {
         var a = Model.Attempts[i];
-        var cls = a.IsHealthy ? "ok" : "bad";
-        var statusText = a.IsHealthy
-            ? $"Reached {a.LastValidTag}"
-            : (a.HasDeviations ? $"{a.DeviationCount} unexpected tag(s)" : $"Stuck at {a.LastValidTag}");
+        var hasFlowDiagram = Model.Diagram.Nodes.Count > 0;
+        var cls = hasFlowDiagram ? (a.IsHealthy ? "ok" : "bad") : "neutral";
+        var statusText = !hasFlowDiagram
+            ? "No flow configured"
+            : (a.IsHealthy
+                ? $"Reached {a.LastValidTag}"
+                : (a.HasDeviations ? $"{a.DeviationCount} unexpected tag(s)" : $"Stuck at {a.LastValidTag}"));
         var activeCls = i == Model.ActiveAttemptIndex ? "active" : "";
         <a class="attempt-tab @cls @activeCls"
            asp-action="Reference" asp-controller="Investigate"
@@ -39,34 +42,46 @@
     <div class="link-banner"><b>Cross-attempt link —</b> @active.CrossAttemptLink</div>
 }
 
-@if (active.IsHealthy)
+@if (Model.Diagram.Nodes.Count > 0)
 {
-    <div class="health-banner ok">Healthy — reached terminal state @active.LastValidTag.</div>
+    @if (active.IsHealthy)
+    {
+        <div class="health-banner ok">Healthy — reached terminal state @active.LastValidTag.</div>
+    }
+    else
+    {
+        <div class="health-banner bad">
+            @if (active.HasDeviations)
+            {
+                <span>Deviation — @active.DeviationCount unexpected tag(s) found (highlighted red below).</span>
+            }
+            @if (active.DeadEnd)
+            {
+                <span>@(active.HasDeviations ? " Also, the" : "The") flow stopped at <b>@active.LastValidTag</b> without reaching a terminal state.</span>
+            }
+        </div>
+    }
+}
+
+@if (Model.Diagram.Nodes.Count == 0)
+{
+    <div class="no-diagram-banner">
+        ⓘ No flow diagram configured for <strong>@Model.FlowName</strong> — showing raw tag sequence only. Tags are not marked as expected or unexpected.
+    </div>
 }
 else
 {
-    <div class="health-banner bad">
-        @if (active.HasDeviations)
-        {
-            <span>Deviation — @active.DeviationCount unexpected tag(s) found (highlighted red below).</span>
-        }
-        @if (active.DeadEnd)
-        {
-            <span>@(active.HasDeviations ? " Also, the" : "The") flow stopped at <b>@active.LastValidTag</b> without reaching a terminal state.</span>
-        }
+    <div class="diagram-panel">
+        <h3>Flow Diagram</h3>
+        @Html.Raw(Model.Diagram.SvgMarkup)
+        <div class="diagram-legend">
+            <span><span class="legend-dot" style="background:#2ecc71"></span> reached</span>
+            <span><span class="legend-dot" style="background:#ef5350"></span> dead end</span>
+            <span><span class="legend-dot" style="background:#3a4150"></span> not reached</span>
+            <span>🔴 unexpected tag followed — see raw sequence below</span>
+        </div>
     </div>
 }
-
-<div class="diagram-panel">
-    <h3>Flow Diagram</h3>
-    @Html.Raw(Model.Diagram.SvgMarkup)
-    <div class="diagram-legend">
-        <span><span class="legend-dot" style="background:#2ecc71"></span> reached</span>
-        <span><span class="legend-dot" style="background:#ef5350"></span> dead end</span>
-        <span><span class="legend-dot" style="background:#3a4150"></span> not reached</span>
-        <span>🔴 unexpected tag followed — see raw sequence below</span>
-    </div>
-</div>
 
 <a class="btn" style="display:inline-block; text-decoration:none; margin-bottom:16px;"
    asp-action="DownloadReport" asp-controller="Investigate"
@@ -82,10 +97,12 @@ else
         var t = active.TagSequence[i];
         var isLast = i == active.TagSequence.Count - 1;
         var isDeadEndTag = isLast && active.DeadEnd;
-        var isBadRow = t.IsUnexpected || isDeadEndTag;
-        <div class="tag-row">
+        var hasFlowDiagram = Model.Diagram.Nodes.Count > 0;
+        var isBadRow = hasFlowDiagram && (t.IsUnexpected || isDeadEndTag);
+        var isNotConfiguredRow = !hasFlowDiagram;
+        <div class="tag-row @(isNotConfiguredRow ? "not-configured" : "")">
             <div class="dot-col">
-                <div class="dot @(isBadRow ? "bad" : "ok")">@(isBadRow ? "×" : "✓")</div>
+                <div class="dot @(isBadRow ? "bad" : (isNotConfiguredRow ? "neutral" : "ok"))">@(isBadRow ? "×" : "✓")</div>
                 @if (!isLast)
                 {
                     <div class="connector @(isBadRow ? "bad" : "")"></div>
@@ -93,7 +110,7 @@ else
             </div>
             <div class="tag-body @(isBadRow ? "deadend" : "")">
                 <div class="tag-name">
-                    @t.TagName@(isDeadEndTag ? " — dead end" : "")@(t.IsUnexpected && !isDeadEndTag ? " — unexpected" : "")
+                    @t.TagName@(isDeadEndTag && hasFlowDiagram ? " — dead end" : "")@(t.IsUnexpected && !isDeadEndTag && hasFlowDiagram ? " — unexpected" : "")
                 </div>
                 <div class="tag-time">@t.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</div>
                 @if (!string.IsNullOrEmpty(t.MetadataJson))
