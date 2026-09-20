@@ -28,18 +28,40 @@ else
 }
 builder.Services.AddSingleton<IFlowTagger, FlowTagger>();
 
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+// Swagger/OpenAPI configuration
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "Production Issue Tracker API",
+        Version = "v1",
+        Description = "API for testing and creating fee calculations and flow tracking",
+        Contact = new Microsoft.OpenApi.Models.OpenApiContact
+        {
+            Name = "Production Issue Tracker Team"
+        }
+    });
+
+    // Enable XML documentation comments in Swagger
+    var xmlFile = Path.Combine(AppContext.BaseDirectory, "Prod_IssueTracker_POC.xml");
+    if (File.Exists(xmlFile))
+    {
+        options.IncludeXmlComments(xmlFile);
+    }
+});
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// Always enable Swagger for easier API testing and development
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Production Issue Tracker API v1");
+    options.RoutePrefix = string.Empty;
+    options.DisplayRequestDuration();
+});
 
 // No wwwroot page anymore — this project only logs data now. Investigation
 // happens exclusively in Prod_IssueTracker_POC.Web, which queries Loki directly.

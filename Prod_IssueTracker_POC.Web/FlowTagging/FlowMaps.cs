@@ -14,44 +14,10 @@ namespace Prod_IssueTracker_POC.Web.FlowTagging
         public const string GetFeeTransaction = "GetFeeTransaction";
         public const string MoneyGramTransaction = "MoneyGramTransaction";
 
-        public static readonly Dictionary<string, string[]> GetFeeFlow = new()
-        {
-            ["RequestReceived"]    = new[] { "ValidationSuccess", "ValidationFailed" },
-            ["ValidationSuccess"]  = new[] { "AgentRetrieved", "AgentInvalid" },
-            ["AgentRetrieved"]     = new[] { "BranchRetrieved", "BranchInvalid" },
-            ["BranchRetrieved"]    = new[] { "FeeCalculated", "FeeCalculationFailed" },
-            ["FeeCalculated"]      = new[] { "ProcessCompleted" },
-        };
-
-        public static readonly HashSet<string> GetFeeTerminalTags = new()
-        {
-            "ValidationFailed", "AgentInvalid", "BranchInvalid", "FeeCalculationFailed", "ProcessCompleted"
-        };
-
         // StatusUpdateFailed deliberately has NO entry here — that's what
         // makes it a dead end (never reaches a terminal tag).
-        public static readonly Dictionary<string, string[]> MoneyGramFlow = new()
-        {
-            ["ValidationSuccess"]       = new[] { "RemittanceCreated" },
-            ["RemittanceCreated"]       = new[] { "AccountServiceInitiated" },
-            ["AccountServiceInitiated"] = new[] { "CommitRequested" },
-            ["CommitRequested"]         = new[] { "CommitSuccess", "CommitTimeout", "CommitFailed" },
-            ["CommitSuccess"]           = new[] { "StatusUpdateAttempted" },
-            ["CommitTimeout"]           = new[] { "StatusUpdateAttempted" },
-            ["CommitFailed"]            = new[] { "StatusUpdateAttempted" },
-            ["StatusUpdateAttempted"]   = new[] { "StatusUpdateSuccess", "StatusUpdateFailed" },
-            ["StatusUpdateSuccess"]     = new[] { "TransactionCompleted", "TransactionFailed" },
-        };
+       
 
-        public static readonly HashSet<string> MoneyGramTerminalTags = new()
-        {
-            "TransactionCompleted", "TransactionFailed"
-        };
 
-        public static readonly Dictionary<string, (Dictionary<string, string[]> Map, HashSet<string> Terminal)> AllFlows = new()
-        {
-            [GetFeeTransaction] = (GetFeeFlow, GetFeeTerminalTags),
-            [MoneyGramTransaction] = (MoneyGramFlow, MoneyGramTerminalTags),
-        };
     }
 }

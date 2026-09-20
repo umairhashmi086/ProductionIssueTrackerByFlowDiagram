@@ -16,5 +16,7 @@ namespace Prod_IssueTracker_POC.FlowTagging
     {
         public const string GetFeeTransaction = "GetFeeTransaction";
         public const string MoneyGramTransaction = "MoneyGramTransaction";
+        public const string SimpleOrderFlow = "SimpleOrderFlow";
     }
 }
+

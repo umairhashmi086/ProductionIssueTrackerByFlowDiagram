@@ -32,9 +32,8 @@ namespace Prod_IssueTracker_POC.Web.Controllers
         public async Task<IActionResult> Index()
         {
             var dbFlowNames = await _flowDefinitions.GetAllFlowNamesAsync();
-            var allFlowNames = FlowMaps.AllFlows.Keys.Concat(dbFlowNames).Distinct().OrderBy(n => n).ToList();
 
-            var model = new SearchIndexViewModel { FlowNames = allFlowNames };
+            var model = new SearchIndexViewModel { FlowNames = dbFlowNames };
             return View(model);
         }
 
@@ -180,7 +179,7 @@ namespace Prod_IssueTracker_POC.Web.Controllers
             // a flow with the same name exists in both, since DB-defined
             // flows are the ones actively being authored/edited.
             var (flowMap, terminalTags) = await _flowDefinitions.GetFlowDefinitionAsync(resolvedFlowName)
-                ?? (FlowMaps.AllFlows.TryGetValue(resolvedFlowName, out var flow) ? flow : (new Dictionary<string, string[]>(), new HashSet<string>()));
+                ??  (new Dictionary<string, string[]>(), new HashSet<string>());
 
             var attempts = attemptsByKongId
                 .Select(kv =>
