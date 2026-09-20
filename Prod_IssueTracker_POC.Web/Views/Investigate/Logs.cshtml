@@ -58,9 +58,16 @@ else
                             <span>@group.LogCount log(s)</span>
                         </div>
                     </div>
-                    <div style="text-align: right; color: var(--text-faint); font-size: 11px;">
-                        <div style="margin-bottom: 4px;">@group.LastLogTime.ToString("HH:mm:ss")</div>
-                        <div style="color: var(--accent); font-weight: 600;">▾</div>
+                    <div style="text-align: right; display: flex; align-items: center; gap: 12px;">
+                        <div style="color: var(--text-faint); font-size: 11px;">
+                            <div style="margin-bottom: 4px;">@group.LastLogTime.ToString("HH:mm:ss")</div>
+                            <div style="color: var(--accent); font-weight: 600;">▾</div>
+                        </div>
+                        <a href="@Url.Action("Reference", "Investigate", new { kongId = group.KongId, flowName = group.FlowName })"
+                           class="flow-diagram-btn"
+                           style="padding: 6px 12px; background: var(--accent); color: white; border: none; border-radius: 4px; font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; white-space: nowrap;">
+                            Show Flow
+                        </a>
                     </div>
                 </summary>
 
@@ -122,5 +129,19 @@ else
 
     details.log-group summary::-webkit-details-marker {
         display: none;
+    }
+
+    .flow-diagram-btn {
+        transition: all 0.15s ease;
+    }
+
+    .flow-diagram-btn:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .flow-diagram-btn:active {
+        transform: translateY(0);
     }
 </style>

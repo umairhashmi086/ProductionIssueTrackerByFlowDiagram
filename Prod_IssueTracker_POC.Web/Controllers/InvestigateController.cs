@@ -147,8 +147,12 @@ namespace Prod_IssueTracker_POC.Web.Controllers
             if (string.Equals(flowName, "All", StringComparison.OrdinalIgnoreCase))
                 flowName = null;
 
-            var searchingByKongId = string.IsNullOrWhiteSpace(referenceNumber) && !string.IsNullOrWhiteSpace(kongId);
-            if (string.IsNullOrWhiteSpace(referenceNumber) && string.IsNullOrWhiteSpace(kongId))
+            // Prioritize Kong ID over reference number since:
+            // 1. Every transaction has a Kong ID
+            // 2. Reference number can be null
+            // 3. Multiple Kong IDs can share the same reference number
+            var searchingByKongId = !string.IsNullOrWhiteSpace(kongId);
+            if (string.IsNullOrWhiteSpace(kongId) && string.IsNullOrWhiteSpace(referenceNumber))
                 return null;
 
             Dictionary<string, List<TagDto>> attemptsByKongId;
@@ -158,7 +162,7 @@ namespace Prod_IssueTracker_POC.Web.Controllers
             {
                 var (foundReference, tags) = await _loki.GetByKongIdAsync(kongId!, flowName);
                 if (tags.Count == 0 || foundReference == null) return null;
-                resolvedReferenceNumber = foundReference;
+                resolvedReferenceNumber = foundReference ?? "Unknown";
                 attemptsByKongId = new Dictionary<string, List<TagDto>> { [kongId!] = tags };
             }
             else
