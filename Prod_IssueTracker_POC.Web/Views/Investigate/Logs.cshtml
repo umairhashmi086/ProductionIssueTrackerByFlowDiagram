@@ -87,7 +87,14 @@ else
                                 </div>
                                 <div class="tag-body">
                                     <div class="tag-name" style="color: var(--accent); font-size: 13px;">@log.TagName</div>
+                                    @if (!string.IsNullOrEmpty(log.ServiceName))
+                                    {
+                                        <div style="font-size: 11px; color: var(--text-faint); margin-top: 2px;">Service: <strong>@log.ServiceName</strong></div>
+                                    }
                                     <div class="tag-time">@log.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff")</div>
+                                    <div style="font-size: 12px; color: var(--text-faint); margin-top: 2px;">
+                                        @(index == 0 ? "start" : $"+{log.LatencyMs}ms")
+                                    </div>
                                     @if (!string.IsNullOrEmpty(log.MetadataJson))
                                     {
                                         <div class="tag-meta" style="margin-top: 6px; color: var(--text-faint); font-size: 11px; word-break: break-all;">

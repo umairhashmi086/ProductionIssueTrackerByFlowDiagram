@@ -6,6 +6,7 @@ namespace Prod_IssueTracker_POC.FlowTagging
     /// PaymentHub system this would be Kong's request id). ReferenceNumber is
     /// the business reference, which can repeat across multiple attempts
     /// (retries) — that's what lets the investigate tool group them together.
+    /// ServiceName identifies which microservice emitted this tag.
     /// </summary>
     public record FlowTagEntry(
         string KongId,
@@ -13,5 +14,6 @@ namespace Prod_IssueTracker_POC.FlowTagging
         string FlowName,
         string TagName,
         string? MetadataJson,
-        DateTimeOffset Timestamp);
+        DateTimeOffset Timestamp,
+        string? ServiceName = null);
 }

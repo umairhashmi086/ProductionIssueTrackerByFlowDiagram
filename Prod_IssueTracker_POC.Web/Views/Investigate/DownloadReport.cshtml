@@ -73,7 +73,7 @@
     <div class="section-label">Raw Tag Sequence</div>
     <table>
         <thead>
-            <tr><th>#</th><th>Tag</th><th>Timestamp</th><th>Metadata</th></tr>
+            <tr><th>#</th><th>Tag</th><th>Service</th><th>Timestamp</th><th>Latency</th><th>Metadata</th></tr>
         </thead>
         <tbody>
             @for (int i = 0; i < active.TagSequence.Count; i++)
@@ -84,7 +84,9 @@
                 <tr>
                     <td>@(i + 1)</td>
                     <td class="tag-name @(isBad ? "bad" : "")">@t.TagName@(isBad && isLast && active.DeadEnd ? " (dead end)" : "")@(t.IsUnexpected && !(isLast && active.DeadEnd) ? " (unexpected)" : "")</td>
+                    <td class="tag-time">@(string.IsNullOrWhiteSpace(t.ServiceName) ? "-" : t.ServiceName)</td>
                     <td class="tag-time">@t.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td class="tag-time">@(i == 0 ? "start" : $"+{t.LatencyMs}ms")</td>
                     <td class="tag-meta">@t.MetadataJson</td>
                 </tr>
             }

@@ -16,6 +16,24 @@ namespace Prod_IssueTracker_POC.Web.Models
         // show exactly which step(s) went wrong, even if the flow recovers
         // to valid tags afterward.
         public bool IsUnexpected { get; set; }
+
+        // Milliseconds elapsed from the previous tag to this tag (0 for the first tag)
+        public long LatencyMs { get; set; }
+
+        // Microservice that emitted this tag
+        public string? ServiceName { get; set; }
+    }
+
+    public class ServiceGroupDto
+    {
+        public string ServiceName { get; set; } = "Unknown";
+        public List<TagDto> Tags { get; set; } = new();
+        public long TotalLatencyMs { get; set; }
+
+        public void CalculateTotalLatency()
+        {
+            TotalLatencyMs = Tags.Sum(t => t.LatencyMs);
+        }
     }
 
     public class AttemptDto
@@ -29,6 +47,7 @@ namespace Prod_IssueTracker_POC.Web.Models
         public bool HasDeviations { get; set; }
         public string? CrossAttemptLink { get; set; }
         public List<TagDto> TagSequence { get; set; } = new();
+        public List<ServiceGroupDto> ServiceGroups { get; set; } = new();
         public int DeviationCount => TagSequence.Count(t => t.IsUnexpected);
     }
 

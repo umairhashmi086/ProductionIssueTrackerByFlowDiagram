@@ -91,31 +91,69 @@ else
 </a>
 
 <div class="section-label">Raw Tag Sequence</div>
-<div class="timeline">
+<div style="display: table; width: 100%; border-collapse: collapse; font-family: monospace; font-size: 13px;">
+    @{
+        string? previousService = null;
+        long blockLatency = 0;
+    }
     @for (int i = 0; i < active.TagSequence.Count; i++)
     {
-        var t = active.TagSequence[i];
-        var isLast = i == active.TagSequence.Count - 1;
-        var isDeadEndTag = isLast && active.DeadEnd;
-        var hasFlowDiagram = Model.Diagram.Nodes.Count > 0;
-        var isBadRow = hasFlowDiagram && (t.IsUnexpected || isDeadEndTag);
-        var isNotConfiguredRow = !hasFlowDiagram;
-        <div class="tag-row @(isNotConfiguredRow ? "not-configured" : "")">
-            <div class="dot-col">
-                <div class="dot @(isBadRow ? "bad" : (isNotConfiguredRow ? "neutral" : "ok"))">@(isBadRow ? "×" : "✓")</div>
-                @if (!isLast)
+        var tag = active.TagSequence[i];
+        var currentService = string.IsNullOrWhiteSpace(tag.ServiceName) ? "Unknown" : tag.ServiceName;
+        var serviceChanged = currentService != previousService;
+
+        // Calculate latency for this block (consecutive tags from same service)
+        if (serviceChanged)
+        {
+            blockLatency = 0;
+            // Sum latencies for all consecutive tags with same service
+            for (int j = i; j < active.TagSequence.Count; j++)
+            {
+                var nextTag = active.TagSequence[j];
+                var nextService = string.IsNullOrWhiteSpace(nextTag.ServiceName) ? "Unknown" : nextTag.ServiceName;
+                if (nextService == currentService)
                 {
-                    <div class="connector @(isBadRow ? "bad" : "")"></div>
+                    blockLatency += nextTag.LatencyMs;
                 }
-            </div>
-            <div class="tag-body @(isBadRow ? "deadend" : "")">
-                <div class="tag-name">
-                    @t.TagName@(isDeadEndTag && hasFlowDiagram ? " — dead end" : "")@(t.IsUnexpected && !isDeadEndTag && hasFlowDiagram ? " — unexpected" : "")
-                </div>
-                <div class="tag-time">@t.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</div>
-                @if (!string.IsNullOrEmpty(t.MetadataJson))
+                else
                 {
-                    <div class="tag-meta">@t.MetadataJson</div>
+                    break;
+                }
+            }
+        }
+
+        <div style="display: table-row;">
+            <!-- Service Column - show only when service changes -->
+            @if (serviceChanged)
+            {
+                <div style="display: table-cell; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--panel-2); font-weight: 600; color: #3b82f6; min-width: 120px;">
+                    @currentService<br/>
+                    <span style="font-size: 11px; font-weight: normal; color: var(--text-faint);">+@(blockLatency)ms</span>
+                </div>
+                previousService = currentService;
+            }
+            else
+            {
+                <div style="display: table-cell; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--panel-2);"></div>
+            }
+
+            <!-- Tags Column -->
+            <div style="display: table-cell; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--border);">
+                <span style="color: var(--ok); font-weight: 500;">✓</span>
+                <span style="margin-left: 8px;">@tag.TagName</span>
+                <span style="margin-left: 16px; color: var(--text-faint);">
+                    @if (i == 0)
+                    {
+                        <span>start</span>
+                    }
+                    else
+                    {
+                        <span>+@(tag.LatencyMs)ms</span>
+                    }
+                </span>
+                @if (!string.IsNullOrEmpty(tag.MetadataJson))
+                {
+                    <div style="margin-top: 4px; color: var(--text-faint); font-size: 11px;">@tag.MetadataJson</div>
                 }
             </div>
         </div>

@@ -198,6 +198,9 @@ namespace Prod_IssueTracker_POC.Web.Controllers
                 var previousKongId = i > 0 ? attempts[i - 1].KongId : null;
                 var link = _validator.TryLinkToPriorAttempt(previous, previousKongId);
 
+                // Calculate latency for each tag
+                var tagsWithLatency = CalculateLatencies(result.AnnotatedTags);
+
                 attemptDtos.Add(new AttemptDto
                 {
                     AttemptNumber = i + 1,
@@ -208,7 +211,8 @@ namespace Prod_IssueTracker_POC.Web.Controllers
                     DeadEnd = result.DeadEnd,
                     HasDeviations = result.HasDeviations,
                     CrossAttemptLink = link,
-                    TagSequence = result.AnnotatedTags
+                    TagSequence = tagsWithLatency,
+                    ServiceGroups = BuildServiceGroups(tagsWithLatency)
                 });
             }
 
@@ -227,6 +231,67 @@ namespace Prod_IssueTracker_POC.Web.Controllers
                 ActiveAttemptIndex = attemptIndex,
                 Diagram = diagram
             };
+        }
+
+        /// <summary>
+        /// Calculates the latency (in milliseconds) between consecutive tags.
+        /// First tag has 0ms latency. Subsequent tags show the time delta from previous tag.
+        /// </summary>
+        private static List<TagDto> CalculateLatencies(List<TagDto> tags)
+        {
+            if (tags.Count == 0) return tags;
+
+            var result = new List<TagDto>();
+            for (int i = 0; i < tags.Count; i++)
+            {
+                var tag = tags[i];
+                var latencyMs = i == 0 ? 0 : (long)(tags[i].Timestamp - tags[i - 1].Timestamp).TotalMilliseconds;
+
+                result.Add(new TagDto
+                {
+                    TagName = tag.TagName,
+                    Timestamp = tag.Timestamp,
+                    MetadataJson = tag.MetadataJson,
+                    RetryCount = tag.RetryCount,
+                    IsUnexpected = tag.IsUnexpected,
+                    LatencyMs = latencyMs,
+                    ServiceName = tag.ServiceName
+                });
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Groups tags by service name and calculates total latency per service.
+        /// </summary>
+        private static List<ServiceGroupDto> BuildServiceGroups(List<TagDto> tags)
+        {
+            if (tags.Count == 0) return new();
+
+            var groups = new Dictionary<string, ServiceGroupDto>();
+            var groupOrder = new List<string>();
+
+            foreach (var tag in tags)
+            {
+                var serviceName = string.IsNullOrWhiteSpace(tag.ServiceName) ? "Unknown" : tag.ServiceName;
+
+                if (!groups.ContainsKey(serviceName))
+                {
+                    groups[serviceName] = new ServiceGroupDto { ServiceName = serviceName };
+                    groupOrder.Add(serviceName);
+                }
+
+                groups[serviceName].Tags.Add(tag);
+            }
+
+            var result = groupOrder.Select(svc =>
+            {
+                var group = groups[svc];
+                group.CalculateTotalLatency();
+                return group;
+            }).ToList();
+
+            return result;
         }
     }
 }

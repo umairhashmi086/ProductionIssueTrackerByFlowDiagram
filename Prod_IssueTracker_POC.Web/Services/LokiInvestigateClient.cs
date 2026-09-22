@@ -39,7 +39,7 @@ namespace Prod_IssueTracker_POC.Web.Services
             return entries
                 .GroupBy(e => e.KongId)
                 .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Timestamp)
-                    .Select(e => new TagDto { TagName = e.TagName, Timestamp = e.Timestamp, MetadataJson = e.MetadataJson })
+                    .Select(e => new TagDto { TagName = e.TagName, Timestamp = e.Timestamp, MetadataJson = e.MetadataJson, ServiceName = e.ServiceName })
                     .ToList());
         }
 
@@ -56,7 +56,7 @@ namespace Prod_IssueTracker_POC.Web.Services
             var ordered = entries.OrderBy(e => e.Timestamp).ToList();
 
             var referenceNumber = ordered.FirstOrDefault()?.ReferenceNumber;
-            var tags = ordered.Select(e => new TagDto { TagName = e.TagName, Timestamp = e.Timestamp, MetadataJson = e.MetadataJson }).ToList();
+            var tags = ordered.Select(e => new TagDto { TagName = e.TagName, Timestamp = e.Timestamp, MetadataJson = e.MetadataJson, ServiceName = e.ServiceName }).ToList();
             return (referenceNumber, tags);
         }
 
@@ -80,7 +80,7 @@ namespace Prod_IssueTracker_POC.Web.Services
                         ReferenceNumber = g.First().ReferenceNumber,
                         FlowName = g.First().FlowName,
                         Tags = g.OrderBy(e => e.Timestamp)
-                            .Select(e => new TagDto { TagName = e.TagName, Timestamp = e.Timestamp, MetadataJson = e.MetadataJson })
+                            .Select(e => new TagDto { TagName = e.TagName, Timestamp = e.Timestamp, MetadataJson = e.MetadataJson, ServiceName = e.ServiceName })
                             .ToList()
                     }
                 );
@@ -107,7 +107,7 @@ namespace Prod_IssueTracker_POC.Web.Services
             return $"{{app=\"{_appLabel}\"}} | json{filter}{flowClause}";
         }
 
-        private record RawEntry(string KongId, string ReferenceNumber, string FlowName, string TagName, string? MetadataJson, DateTimeOffset Timestamp);
+        private record RawEntry(string KongId, string ReferenceNumber, string FlowName, string TagName, string? MetadataJson, DateTimeOffset Timestamp, string? ServiceName = null);
 
         public class LogGroupData
         {
@@ -153,7 +153,8 @@ namespace Prod_IssueTracker_POC.Web.Services
                         FlowName: root.GetProperty("FlowName").GetString()!,
                         TagName: root.GetProperty("TagName").GetString()!,
                         MetadataJson: root.TryGetProperty("Metadata", out var m) ? m.GetString() : null,
-                        Timestamp: timestamp));
+                        Timestamp: timestamp,
+                        ServiceName: root.TryGetProperty("ServiceName", out var sn) ? sn.GetString() : null));
                 }
             }
 

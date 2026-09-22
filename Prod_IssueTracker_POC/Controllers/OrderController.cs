@@ -66,22 +66,24 @@ namespace Prod_IssueTracker_POC.Controllers
             }
 
             _flowTagger.Tag(kongId, referenceNumber, FlowMaps.SimpleOrderFlow, "OrderValidated",
-                new { orderId = request.OrderId, amount = request.Amount });
+                new { orderId = request.OrderId, amount = request.Amount },serviceName:"Remittance");
 
             // Step 2: Accept order
             await Task.Delay(100); // Simulate some processing
             _flowTagger.Tag(kongId, referenceNumber, FlowMaps.SimpleOrderFlow, "OrderAccepted",
-                new { customerName = request.CustomerName });
-
+                new { customerName = request.CustomerName },serviceName: "Order");
+            await Task.Delay(100); // Simulate some processing
+            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.SimpleOrderFlow, "OrderAccepted",
+                new { customerName = request.CustomerName }, serviceName: "Order");
             // Step 3: Processing
             await Task.Delay(150); // Simulate more processing
             _flowTagger.Tag(kongId, referenceNumber, FlowMaps.SimpleOrderFlow, "OrderProcessing",
-                new { productType = request.ProductType });
+                new { productType = request.ProductType },serviceName: "Configuration");
 
             // Step 4: Complete
             await Task.Delay(100); // Simulate final processing
             _flowTagger.Tag(kongId, referenceNumber, FlowMaps.SimpleOrderFlow, "OrderCompleted",
-                new { status = "success", timestamp = DateTime.UtcNow });
+                new { status = "success", timestamp = DateTime.UtcNow },serviceName:"Order");
 
             var response = new OrderResponse
             {

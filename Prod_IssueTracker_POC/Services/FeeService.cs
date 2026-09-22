@@ -16,6 +16,7 @@ namespace Prod_IssueTracker_POC.Services
     {
         private readonly ILogger<FeeService> _logger;
         private readonly IFlowTagger _flowTagger;
+        private const string ServiceName = "FeeService";
 
         public FeeService(ILogger<FeeService> logger, IFlowTagger flowTagger)
         {
@@ -30,33 +31,33 @@ namespace Prod_IssueTracker_POC.Services
             if (request == null)
             {
                 _logger.LogWarning("[{ReferenceNumber}] Request is null", referenceNumber);
-                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "ValidationFailed", new { reason = "Request is null" });
+                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "ValidationFailed", new { reason = "Request is null" }, serviceName: ServiceName);
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(request.AgentId))
             {
                 _logger.LogWarning("[{ReferenceNumber}] AgentId is required", referenceNumber);
-                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "ValidationFailed", new { reason = "AgentId is required" });
+                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "ValidationFailed", new { reason = "AgentId is required" }, serviceName: ServiceName);
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(request.BranchId))
             {
                 _logger.LogWarning("[{ReferenceNumber}] BranchId is required", referenceNumber);
-                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "ValidationFailed", new { reason = "BranchId is required" });
+                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "ValidationFailed", new { reason = "BranchId is required" }, serviceName: ServiceName);
                 return false;
             }
 
             if (request.Amount == null || request.Amount <= 0)
             {
                 _logger.LogWarning("[{ReferenceNumber}] Amount must be greater than zero", referenceNumber);
-                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "ValidationFailed", new { reason = "Amount must be greater than zero" });
+                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "ValidationFailed", new { reason = "Amount must be greater than zero" }, serviceName: ServiceName);
                 return false;
             }
 
             _logger.LogInformation("[{ReferenceNumber}] Request validation successful", referenceNumber);
-            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "ValidationSuccess");
+            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "ValidationSuccess", serviceName: ServiceName);
             return await Task.FromResult(true);
         }
 
@@ -77,9 +78,9 @@ namespace Prod_IssueTracker_POC.Services
             _logger.LogInformation("[{ReferenceNumber}] Agent retrieved successfully: {AgentName}", referenceNumber, agent.AgentName);
 
             if (agent == null || !agent.IsActive)
-                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "AgentInvalid");
+                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "AgentInvalid", serviceName: ServiceName);
             else
-                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "AgentRetrieved", new { agentId = agent.AgentId });
+                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "AgentRetrieved", new { agentId = agent.AgentId }, serviceName: ServiceName);
 
             return await Task.FromResult(agent);
         }
@@ -101,9 +102,9 @@ namespace Prod_IssueTracker_POC.Services
             _logger.LogInformation("[{ReferenceNumber}] Branch retrieved successfully: {BranchName}", referenceNumber, branch.BranchName);
 
             if (branch == null || !branch.IsActive)
-                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "BranchInvalid");
+                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "BranchInvalid", serviceName: ServiceName);
             else
-                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "BranchRetrieved", new { branchId = branch.BranchId });
+                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "BranchRetrieved", new { branchId = branch.BranchId }, serviceName: ServiceName);
 
             return await Task.FromResult(branch);
         }
@@ -130,9 +131,9 @@ namespace Prod_IssueTracker_POC.Services
             _logger.LogInformation("[{ReferenceNumber}] Fee calculated successfully: {TotalFee}", referenceNumber, totalFee);
 
             if (feeDetail == null)
-                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "FeeCalculationFailed");
+                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "FeeCalculationFailed", serviceName: ServiceName);
             else
-                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "FeeCalculated", new { totalFee = feeDetail.TotalFee });
+                _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "FeeCalculated", new { totalFee = feeDetail.TotalFee }, serviceName: ServiceName);
 
             return await Task.FromResult(feeDetail);
         }
@@ -142,7 +143,7 @@ namespace Prod_IssueTracker_POC.Services
             var referenceNumber = request.ReferenceNumber ?? $"REF{Guid.NewGuid().ToString().Replace("-", "").Substring(0, 12).ToUpper()}";
 
             _logger.LogInformation("[{ReferenceNumber}] Starting Fee Calculation Process", referenceNumber);
-            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "RequestReceived");
+            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "RequestReceived", serviceName: ServiceName);
 
             var response = new FeeResponse
             {
@@ -192,9 +193,7 @@ namespace Prod_IssueTracker_POC.Services
             response.Fee = fee;
 
             _logger.LogInformation("[{ReferenceNumber}] Fee Calculation Process completed successfully. Total Fee: {TotalFee}", referenceNumber, fee.TotalFee);
-            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "Failed");
-            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "Failed1");
-            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "Failed2");
+            _flowTagger.Tag(kongId, referenceNumber, FlowMaps.GetFeeTransaction, "TransactionCompleted", serviceName: ServiceName);
             return response;
         }
     }

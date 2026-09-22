@@ -46,7 +46,8 @@ namespace Prod_IssueTracker_POC.FlowTagging
                     entry.ReferenceNumber,
                     entry.FlowName,
                     entry.TagName,
-                    Metadata = entry.MetadataJson
+                    Metadata = entry.MetadataJson,
+                    entry.ServiceName
                 });
 
                 var tsNanos = entry.Timestamp.ToUnixTimeMilliseconds() * 1_000_000;
@@ -141,7 +142,8 @@ namespace Prod_IssueTracker_POC.FlowTagging
                             FlowName: root.GetProperty("FlowName").GetString()!,
                             TagName: root.GetProperty("TagName").GetString()!,
                             MetadataJson: root.TryGetProperty("Metadata", out var m) ? m.GetString() : null,
-                            Timestamp: timestamp));
+                            Timestamp: timestamp,
+                            ServiceName: root.TryGetProperty("ServiceName", out var sn) ? sn.GetString() : null));
                     }
                 }
             }

@@ -72,7 +72,8 @@ namespace Prod_IssueTracker_POC.Web.FlowTagging
             Timestamp = t.Timestamp,
             MetadataJson = t.MetadataJson,
             RetryCount = t.RetryCount,
-            IsUnexpected = isUnexpected
+            IsUnexpected = isUnexpected,
+            ServiceName = t.ServiceName
         };
 
         /// <summary>
