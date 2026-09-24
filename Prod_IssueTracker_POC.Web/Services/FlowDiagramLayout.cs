@@ -14,7 +14,7 @@ namespace Prod_IssueTracker_POC.Web.Services
     /// </summary>
     public static class FlowDiagramLayout
     {
-        private const double NodeW = 60, NodeH = 30, RowHeight = 50, ColWidth = 90, TopPad = 20, LeftPad = 20;
+        private const double NodeW = 25, NodeH = 10, RowHeight = 18, ColWidth = 35, TopPad = 8, LeftPad = 8;
 
         public static DiagramViewModel Build(
             Dictionary<string, string[]> flowMap,
@@ -167,8 +167,8 @@ namespace Prod_IssueTracker_POC.Web.Services
             var sb = new System.Text.StringBuilder();
             sb.Append($"<svg viewBox=\"0 0 {Fmt(width)} {Fmt(height)}\" xmlns=\"http://www.w3.org/2000/svg\" style=\"width:100%;height:auto;\">");
             sb.Append("<defs>");
-            sb.Append("<marker id=\"arrow-ok\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#2ecc71\" /></marker>");
-            sb.Append("<marker id=\"arrow-dim\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#3a4150\" /></marker>");
+            sb.Append("<marker id=\"arrow-ok\" markerWidth=\"4\" markerHeight=\"4\" refX=\"3\" refY=\"1.5\" orient=\"auto\"><path d=\"M0,0 L3,1.5 L0,3 Z\" fill=\"#2ecc71\" /></marker>");
+            sb.Append("<marker id=\"arrow-dim\" markerWidth=\"4\" markerHeight=\"4\" refX=\"3\" refY=\"1.5\" orient=\"auto\"><path d=\"M0,0 L3,1.5 L0,3 Z\" fill=\"#3a4150\" /></marker>");
             sb.Append("</defs>");
 
             foreach (var e in edges)
@@ -210,65 +210,54 @@ namespace Prod_IssueTracker_POC.Web.Services
                 var textColor = isBad ? "#ef5350" : (n.IsReached ? "#2ecc71" : "#5c6577");
                 var dashAttr = isBad ? " stroke-dasharray=\"4,2\"" : "";
 
-                // Nodes never reached in this attempt (dim/grey, e.g. an
-                // alternate branch that wasn't taken) are drawn smaller and
-                // centered within their column — a smaller, clearly
-                // secondary box reads better next to the bowed-around line
-                // above than a full-size box the same size as the actual
-                // path's nodes.
                 var isDimUnreached = !n.IsReached && !isBad;
                 var boxW = isDimUnreached ? NodeW * 0.7 : NodeW;
                 var boxH = isDimUnreached ? NodeH * 0.72 : NodeH;
                 var boxX = n.X + (NodeW - boxW) / 2;
                 var boxY = n.Y + (NodeH - boxH) / 2;
-                var fontSize = isDimUnreached ? 3 : 4;
+                var fontSize = isDimUnreached ? 2 : 2.5;
 
-                sb.Append($"<rect x=\"{Fmt(boxX)}\" y=\"{Fmt(boxY)}\" width=\"{Fmt(boxW)}\" height=\"{Fmt(boxH)}\" rx=\"8\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{(isBad ? "1.5" : "1")}\"{dashAttr} />");
+                sb.Append($"<rect x=\"{Fmt(boxX)}\" y=\"{Fmt(boxY)}\" width=\"{Fmt(boxW)}\" height=\"{Fmt(boxH)}\" rx=\"3\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{(isBad ? "0.75" : "0.5")}\"{dashAttr} />");
 
                 var labelLines = System.Text.RegularExpressions.Regex.Replace(n.Id, "([a-z])([A-Z])", "$1\n$2").Split('\n');
-                var lineHeight = fontSize + 3;
+                var lineHeight = fontSize + 2;
                 var textCenterX = n.X + NodeW / 2;
                 var textCenterY = n.Y + NodeH / 2;
                 var startY = textCenterY - ((labelLines.Length - 1) * lineHeight) / 2.0;
                 for (int li = 0; li < labelLines.Length; li++)
                 {
                     var lineY = startY + li * lineHeight;
-                    sb.Append($"<text x=\"{Fmt(textCenterX)}\" y=\"{Fmt(lineY)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"SFMono-Regular,Consolas,monospace\" font-size=\"{fontSize}\" font-weight=\"300\" fill=\"{textColor}\">{System.Net.WebUtility.HtmlEncode(labelLines[li])}</text>");
+                    sb.Append($"<text x=\"{Fmt(textCenterX)}\" y=\"{Fmt(lineY)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"SFMono-Regular,Consolas,monospace\" font-size=\"{fontSize}\" font-weight=\"400\" fill=\"{textColor}\">{System.Net.WebUtility.HtmlEncode(labelLines[li])}</text>");
                 }
 
-                var belowY = n.Y + NodeH + 14;
+                var belowY = n.Y + NodeH + 10;
 
                 if (n.RetryCount > 1)
                 {
-                    var badgeText = $"retried:{n.RetryCount}";
-                    var pillWidth = 16 + badgeText.Length * 5.2;
-                    sb.Append($"<rect x=\"{Fmt(textCenterX - pillWidth / 2)}\" y=\"{Fmt(belowY - 10)}\" width=\"{Fmt(pillWidth)}\" height=\"14\" rx=\"7\" fill=\"#2b2211\" stroke=\"#f0a93a\" stroke-width=\"0.75\" />");
-                    sb.Append($"<text x=\"{Fmt(textCenterX)}\" y=\"{Fmt(belowY)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"4\" font-weight=\"300\" fill=\"#f0a93a\">{System.Net.WebUtility.HtmlEncode(badgeText)}</text>");
-                    belowY += 16;
+                    // Tiny retry indicator - just a small dot
+                    var dotSize = 2.5;
+                    sb.Append($"<circle cx=\"{Fmt(textCenterX + NodeW/2 - 2)}\" cy=\"{Fmt(n.Y - 2)}\" r=\"{dotSize}\" fill=\"#f0a93a\" />");
+                    sb.Append($"<text x=\"{Fmt(textCenterX + NodeW/2 - 2)}\" y=\"{Fmt(n.Y - 2)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"1.5\" font-weight=\"600\" fill=\"#0f1115\">{n.RetryCount}</text>");
                 }
 
                 if (n.IsDeadEnd)
                 {
-                    sb.Append($"<text x=\"{Fmt(textCenterX)}\" y=\"{Fmt(belowY)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"5\" fill=\"#ef5350\">dead end</text>");
-                    belowY += 14;
+                    sb.Append($"<text x=\"{Fmt(textCenterX)}\" y=\"{Fmt(belowY)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"2.5\" fill=\"#ef5350\">end</text>");
+                    belowY += 10;
                 }
 
-                // Small red circle marker: "an unexpected tag followed this
-                // node at least once — see the raw list below for exactly
-                // what and when." Deliberately minimal — no attempt to draw
-                // where the deviation actually went.
                 if (deviationsAfterNode.TryGetValue(n.Id, out var devCount))
                 {
                     var cx = textCenterX;
-                    var cy = belowY + 4;
-                    sb.Append($"<circle cx=\"{Fmt(cx)}\" cy=\"{Fmt(cy)}\" r=\"7\" fill=\"#ef5350\" />");
+                    var cy = belowY + 2;
+                    sb.Append($"<circle cx=\"{Fmt(cx)}\" cy=\"{Fmt(cy)}\" r=\"4\" fill=\"#ef5350\" />");
                     if (devCount > 1)
                     {
-                        sb.Append($"<text x=\"{Fmt(cx)}\" y=\"{Fmt(cy + 3)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"4\" font-weight=\"300\" fill=\"#0f1115\">{devCount}</text>");
+                        sb.Append($"<text x=\"{Fmt(cx)}\" y=\"{Fmt(cy + 1)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"2\" font-weight=\"400\" fill=\"#0f1115\">{devCount}</text>");
                     }
                     else
                     {
-                        sb.Append($"<text x=\"{Fmt(cx)}\" y=\"{Fmt(cy + 3)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"5\" font-weight=\"300\" fill=\"#0f1115\">!</text>");
+                        sb.Append($"<text x=\"{Fmt(cx)}\" y=\"{Fmt(cy + 1)}\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"2.5\" font-weight=\"400\" fill=\"#0f1115\">!</text>");
                     }
                 }
             }
