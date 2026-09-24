@@ -1,13 +1,21 @@
-﻿################################################################################
-# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
-################################################################################
+﻿# Visual Studio
+.vs/
+**/.vs/
 
-/.vs
-/obj
-/Prod_IssueTracker_POC/bin
-/Prod_IssueTracker_POC/obj
-/Prod_IssueTracker_POC.Web/bin
-/Prod_IssueTracker_POC.Web/obj
-/bin
-/Prod_IssueTracker_POC.Web/obj
+# Build output
+bin/
+obj/
 
+# Project-specific build output
+Prod_IssueTracker_POC/bin/
+Prod_IssueTracker_POC/obj/
+Prod_IssueTracker_POC.Web/bin/
+Prod_IssueTracker_POC.Web/obj/
+
+# Debug
+**/obj/Debug/
+**/obj/Release/
+
+# User-specific files
+*.user
+*.suo
