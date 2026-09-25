@@ -21,9 +21,17 @@ namespace Prod_IssueTracker_POC.Web.Controllers
 
         // GET /Tag — list all catalog tags, with a form to add a new one.
         [HttpGet]
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? search)
         {
             var tags = await _repo.GetAllAsync();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var searchLower = search.ToLower();
+                tags = tags.Where(t => t.TagName.ToLower().Contains(searchLower)).ToList();
+            }
+
+            ViewBag.SearchQuery = search ?? "";
             return View(tags);
         }
 

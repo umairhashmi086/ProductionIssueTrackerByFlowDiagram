@@ -8,6 +8,18 @@
     <p style="color: var(--text-dim); margin: 0; font-size: 13px;">Manage reusable transaction state tags</p>
 </div>
 
+<form asp-action="Index" asp-controller="Tag" method="get" class="search-form" style="margin-bottom:20px;">
+    <div class="search-field">
+        <label for="search">Search Tags</label>
+        <input type="text" id="search" name="search" placeholder="Search by tag name..." value="@ViewBag.SearchQuery" />
+    </div>
+    <button type="submit">Search</button>
+    @if (!string.IsNullOrEmpty(ViewBag.SearchQuery))
+    {
+        <a href="@Url.Action("Index", "Tag")" class="linklike" style="margin-left: 12px; text-decoration: none;">Clear</a>
+    }
+</form>
+
 <form asp-action="Create" asp-controller="Tag" method="post" class="search-form" style="margin-bottom:20px;">
     @Html.AntiForgeryToken()
     <div class="search-field">
@@ -29,7 +41,16 @@
 
 @if (Model.Count == 0)
 {
-    <div class="empty">No tags yet — add one to get started.</div>
+    <div class="empty">
+        @if (!string.IsNullOrEmpty(ViewBag.SearchQuery))
+        {
+            <div>No tags found matching "@ViewBag.SearchQuery"</div>
+        }
+        else
+        {
+            <div>No tags yet — add one to get started.</div>
+        }
+    </div>
 }
 else
 {

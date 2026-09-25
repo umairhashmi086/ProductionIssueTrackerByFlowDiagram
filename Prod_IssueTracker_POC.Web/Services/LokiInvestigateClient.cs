@@ -61,14 +61,16 @@ namespace Prod_IssueTracker_POC.Web.Services
         }
 
         /// <summary>
-        /// Fetches all logs from the last 24 hours, grouped by Kong ID.
+        /// Fetches all logs within a date range, grouped by Kong ID.
         /// Optionally filters by flow name if provided.
         /// Used for the logs browser page to display all transaction attempts.
         /// </summary>
-        public async Task<Dictionary<string, LogGroupData>> GetAllLogsGroupedByKongIdAsync(string? flowName = null)
+        public async Task<Dictionary<string, LogGroupData>> GetAllLogsGroupedByKongIdAsync(string? flowName = null, DateTimeOffset? startDate = null, DateTimeOffset? endDate = null)
         {
             var query = BuildQuery("", flowName);
-            var entries = await QueryAsync(query);
+            var start = startDate ?? DateTimeOffset.UtcNow.AddDays(-7);
+            var end = endDate ?? DateTimeOffset.UtcNow;
+            var entries = await QueryAsync(query, start, end);
 
             var grouped = entries
                 .GroupBy(e => e.KongId)
@@ -117,12 +119,12 @@ namespace Prod_IssueTracker_POC.Web.Services
             public List<TagDto> Tags { get; set; } = new();
         }
 
-        private async Task<List<RawEntry>> QueryAsync(string logQlQuery)
+        private async Task<List<RawEntry>> QueryAsync(string logQlQuery, DateTimeOffset? startDate = null, DateTimeOffset? endDate = null)
         {
             var results = new List<RawEntry>();
 
-            var start = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeMilliseconds() * 1_000_000;
-            var end = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000;
+            var start = (startDate ?? DateTimeOffset.UtcNow.AddHours(-24)).ToUnixTimeMilliseconds() * 1_000_000;
+            var end = (endDate ?? DateTimeOffset.UtcNow).ToUnixTimeMilliseconds() * 1_000_000;
 
             var url = $"{_baseUrl}/loki/api/v1/query_range" +
                       $"?query={Uri.EscapeDataString(logQlQuery)}" +

@@ -36,13 +36,18 @@ namespace Prod_IssueTracker_POC.Web.Controllers
 
         // GET /Investigate/Logs — display all logs grouped by Kong ID
         [HttpGet]
-        public async Task<IActionResult> Logs(string? flowName)
+        public async Task<IActionResult> Logs(string? flowName, DateTime? fromDate, DateTime? toDate)
         {
             var dbFlowNames = await _flowDefinitions.GetAllFlowNamesAsync();
             ViewBag.FlowNames = dbFlowNames;
 
-            // Fetch all logs from Loki grouped by Kong ID
-            var logsGroupedByKongId = await _loki.GetAllLogsGroupedByKongIdAsync(flowName);
+            // Default to today (00:00 to 23:59) if no dates provided
+            var now = DateTime.Now;
+            var startDate = fromDate ?? new DateTime(now.Year, now.Month, now.Day, 0, 0, 0);
+            var endDate = toDate ?? new DateTime(now.Year, now.Month, now.Day, 23, 59, 59);
+
+            // Fetch all logs from Loki grouped by Kong ID with date range
+            var logsGroupedByKongId = await _loki.GetAllLogsGroupedByKongIdAsync(flowName, new DateTimeOffset(startDate), new DateTimeOffset(endDate));
 
             // Convert to LogGroupDto for the view
             var logGroups = logsGroupedByKongId.Values
@@ -62,7 +67,9 @@ namespace Prod_IssueTracker_POC.Web.Controllers
             var model = new LogsPageViewModel
             {
                 FlowName = flowName,
-                LogGroups = logGroups
+                LogGroups = logGroups,
+                FromDate = fromDate,
+                ToDate = toDate
             };
 
             return View(model);

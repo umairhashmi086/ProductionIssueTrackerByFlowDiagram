@@ -1,6 +1,9 @@
-@model LogsPageViewModel
+@model Prod_IssueTracker_POC.Web.Models.LogsPageViewModel
+
 @{
-    ViewData["Title"] = "Transaction Logs";
+    var now = DateTime.Now;
+    var todayStart = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0);
+    var todayEnd = new DateTime(now.Year, now.Month, now.Day, 23, 59, 59);
 }
 
 <div style="margin-bottom: 32px;">
@@ -9,27 +12,39 @@
 </div>
 
 <form method="get" class="search-form" style="margin-bottom: 24px;">
-    @if (ViewBag.FlowNames != null && ((List<string>)ViewBag.FlowNames).Count > 0)
-    {
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; align-items: flex-end;">
         <div class="search-field">
-            <label for="flowNameSelect">Filter by Flow</label>
-            <select id="flowNameSelect" name="flowName">
-                <option value="">All Flows</option>
-                @foreach (var flow in (List<string>)ViewBag.FlowNames)
-                {
-                    if (Model.FlowName == flow)
-                    {
-                        <option value="@flow" selected="selected">@flow</option>
-                    }
-                    else
-                    {
-                        <option value="@flow">@flow</option>
-                    }
-                }
-            </select>
+            <label for="fromDate">From Date</label>
+            <input type="datetime-local" id="fromDate" name="fromDate"
+                   value="@(Model.FromDate?.ToString("yyyy-MM-ddTHH:mm") ?? todayStart.ToString("yyyy-MM-ddTHH:mm"))" />
         </div>
-    }
-    <button type="submit" style="margin-top: 24px;">Filter Logs</button>
+        <div class="search-field">
+            <label for="toDate">To Date</label>
+            <input type="datetime-local" id="toDate" name="toDate"
+                   value="@(Model.ToDate?.ToString("yyyy-MM-ddTHH:mm") ?? todayEnd.ToString("yyyy-MM-ddTHH:mm"))" />
+        </div>
+        @if (ViewBag.FlowNames != null && ((List<string>)ViewBag.FlowNames).Count > 0)
+        {
+            <div class="search-field">
+                <label for="flowNameSelect">Filter by Flow</label>
+                <select id="flowNameSelect" name="flowName">
+                    <option value="">All Flows</option>
+                    @foreach (var flow in (List<string>)ViewBag.FlowNames)
+                    {
+                        if (Model.FlowName == flow)
+                        {
+                            <option value="@flow" selected="selected">@flow</option>
+                        }
+                        else
+                        {
+                            <option value="@flow">@flow</option>
+                        }
+                    }
+                </select>
+            </div>
+        }
+        <button type="submit" style="margin-top: 0;">Filter Logs</button>
+    </div>
 </form>
 
 @if (Model.LogGroups.Count == 0)

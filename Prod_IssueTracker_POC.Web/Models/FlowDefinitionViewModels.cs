@@ -91,6 +91,8 @@ namespace Prod_IssueTracker_POC.Web.Models
         public List<LogGroupDto> LogGroups { get; set; } = new();
         public string? SelectedKongId { get; set; }
         public string? FlowName { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
     }
 
     public class LogGroupDto
