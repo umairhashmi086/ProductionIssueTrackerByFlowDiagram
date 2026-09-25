@@ -9,19 +9,16 @@ namespace Prod_IssueTracker_POC.Web.Controllers
     public class InvestigateController : Controller
     {
         private readonly LokiInvestigateClient _loki;
-        private readonly DemoSeedClient _demoSeed;
         private readonly FlowDefinitionRepository _flowDefinitions;
         private readonly RazorViewRenderer _viewRenderer;
         private readonly FlowValidator _validator = new();
 
         public InvestigateController(
             LokiInvestigateClient loki,
-            DemoSeedClient demoSeed,
             FlowDefinitionRepository flowDefinitions,
             RazorViewRenderer viewRenderer)
         {
             _loki = loki;
-            _demoSeed = demoSeed;
             _flowDefinitions = flowDefinitions;
             _viewRenderer = viewRenderer;
         }
@@ -126,15 +123,6 @@ namespace Prod_IssueTracker_POC.Web.Controllers
             return File(bytes, "text/html", fileName);
         }
 
-        // POST /Investigate/SeedDemo — this is the one place Web still talks
-        // to the API project, because seeding sample data is a WRITE action
-        // (it asks the producer to log something), not a read.
-        [HttpPost]
-        public async Task<IActionResult> SeedDemo()
-        {
-            var referenceNumber = await _demoSeed.SeedMoneyGramScenarioAsync();
-            return RedirectToAction(nameof(Reference), new { referenceNumber = referenceNumber ?? "MG-2026-00417" });
-        }
 
         /// <summary>
         /// Shared lookup + validation logic used by both Reference (renders

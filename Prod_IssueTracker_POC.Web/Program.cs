@@ -10,14 +10,6 @@ builder.Services.AddControllersWithViews();
 // anything about them beyond a FlowMaps entry (see FlowTagging/FlowMaps.cs).
 builder.Services.AddHttpClient<LokiInvestigateClient>();
 
-// Writes: the ONE remaining call to the API project, and only because
-// seeding demo data is a write action ("log this scenario"), not a read.
-builder.Services.AddHttpClient<DemoSeedClient>(client =>
-{
-    var apiBaseUrl = builder.Configuration["InvestigateApi:BaseUrl"] ?? "http://localhost:5221";
-    client.BaseAddress = new Uri(apiBaseUrl);
-});
-
 // Flow definitions (tags + allowed transitions): stored in Postgres, edited
 // via the Flow Definitions admin page, read by InvestigateController as an
 // alternative/addition to the hardcoded FlowMaps.cs entries.
