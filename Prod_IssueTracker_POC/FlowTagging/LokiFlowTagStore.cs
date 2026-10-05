@@ -42,7 +42,7 @@ namespace Prod_IssueTracker_POC.FlowTagging
             {
                 var logLine = JsonSerializer.Serialize(new
                 {
-                    entry.KongId,
+                    entry.UniqueId,
                     entry.ReferenceNumber,
                     entry.FlowName,
                     entry.TagName,
@@ -96,7 +96,7 @@ namespace Prod_IssueTracker_POC.FlowTagging
             var entries = QueryAsync(query).GetAwaiter().GetResult();
 
             return entries
-                .GroupBy(e => e.KongId)
+                .GroupBy(e => e.UniqueId)
                 .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Timestamp).ToList());
         }
 
@@ -137,7 +137,7 @@ namespace Prod_IssueTracker_POC.FlowTagging
                         var root = lineDoc.RootElement;
 
                         results.Add(new FlowTagEntry(
-                            KongId: root.GetProperty("KongId").GetString()!,
+                            UniqueId: root.GetProperty("KongId").GetString()!,
                             ReferenceNumber: root.GetProperty("ReferenceNumber").GetString()!,
                             FlowName: root.GetProperty("FlowName").GetString()!,
                             TagName: root.GetProperty("TagName").GetString()!,

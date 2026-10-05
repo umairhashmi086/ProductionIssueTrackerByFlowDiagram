@@ -9,7 +9,7 @@ namespace Prod_IssueTracker_POC.FlowTagging
     /// ServiceName identifies which microservice emitted this tag.
     /// </summary>
     public record FlowTagEntry(
-        string KongId,
+        string UniqueId,
         string ReferenceNumber,
         string FlowName,
         string TagName,

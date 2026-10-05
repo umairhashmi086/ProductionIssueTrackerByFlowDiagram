@@ -30,11 +30,11 @@ namespace Prod_IssueTracker_POC.FlowTagging
         {
             lock (_writeLock)
             {
-                var list = _byKongId.GetOrAdd(entry.KongId, _ => new List<FlowTagEntry>());
+                var list = _byKongId.GetOrAdd(entry.UniqueId, _ => new List<FlowTagEntry>());
                 list.Add(entry);
 
                 var kongIds = _kongIdsByReference.GetOrAdd(entry.ReferenceNumber, _ => new ConcurrentDictionary<string, byte>());
-                kongIds.TryAdd(entry.KongId, 0);
+                kongIds.TryAdd(entry.UniqueId, 0);
             }
         }
 
